@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('personal_access_tokens', function (Blueprint $table) {
-            //
+            $table->foreignId('membership_id')->nullable()->constrained()->nullOnDelete();
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('personal_access_tokens', function (Blueprint $table) {
-            //
+            $table->dropConstrainedForeignId('membership_id');
         });
     }
 };
