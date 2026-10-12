@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Enums\Role;
 use App\Enums\Space;
+use App\Models\Cga;
 use App\Models\Membership;
 
 /**
@@ -41,5 +42,10 @@ class ActiveSpace
     public function cgaId(): ?int
     {
         return $this->membership?->cga_id;
+    }
+
+    public function cga(): ?Cga
+    {
+        return $this->membership?->cga;
     }
 }

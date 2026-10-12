@@ -1,0 +1,102 @@
+{
+  "$schema": "legal-flow-referentiel",
+  "version": "2026-08-08",
+  "revision_technique": "2026-08-14 — ajout des champs lisibles par machine « periodicite_conditionnelle » (transcription de regle_mt) et « plateforme » (repris du planning du prototype v4). Aucune règle, aucun seuil, aucune échéance modifiés. À contresigner par l'expert-comptable : voir docs/tickets-referentiel.md.",
+  "pays": "CI",
+  "commentaire": "Référentiel des obligations — source unique du moteur Legal Flow. Les conditions sont déclaratives : champ, opérateur, valeur. Périodicités : P ponctuelle, M mensuelle, T trimestrielle, A annuelle, C continue, E sur événement. Toute modification exige un test et une validation expert-comptable.",
+  "profil_champs": ["regime", "forme", "effectif", "ayants_droit", "commune", "vente_consommateurs", "instruments_mesure", "expatries", "stagiaires", "statut_pme"],
+  "seuils": {
+    "reglement_interieur_effectif": 10,
+    "delegues_personnel_effectif": 11,
+    "csst_effectif": 50,
+    "cnps_mensuelle_effectif": 20
+  },
+  "organismes": [
+    {
+      "code": "dgi",
+      "nom": "Direction Générale des Impôts",
+      "obligations": [
+        { "id": "ncc", "libelle": "Déclaration fiscale d'existence — immatriculation NCC", "base": "CGI", "periodicite": "P", "condition": null },
+        { "id": "micro", "libelle": "Impôt des microentreprises — déclaration et paiement", "base": "CGI — régime RME", "periodicite": "M", "jour": 10, "plateforme": "e-impôts", "condition": { "champ": "regime", "op": "=", "val": "RME" } },
+        { "id": "tee", "libelle": "Taxe de l'entreprenant — déclaration annuelle", "base": "CGI — régime TEE", "periodicite": "A", "echeance": "30/01", "plateforme": "e-impôts", "condition": { "champ": "regime", "op": "=", "val": "TEE" } },
+        { "id": "tva", "libelle": "TVA — déclaration et paiement", "base": "CGI", "periodicite": "M", "jour": 10, "plateforme": "e-impôts", "condition": { "champ": "regime", "op": "=", "val": "RSI" } },
+        { "id": "bic", "libelle": "Impôt BIC — acomptes et solde · contribution des patentes", "base": "CGI", "periodicite": "A", "echeance": "30/04", "plateforme": "e-impôts", "condition": { "champ": "regime", "op": "=", "val": "RSI" } },
+        { "id": "its", "libelle": "Retenues ITS sur salaires — reversement", "base": "CGI — retenues à la source", "periodicite": "M", "jour": 10, "plateforme": "e-impôts", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "ef", "libelle": "États financiers SYSCOHADA — dépôt de la liasse (GUDEF)", "base": "CGI · Acte uniforme OHADA", "periodicite": "A", "echeance": "30/05", "plateforme": "GUDEF", "condition": null },
+        { "id": "e301", "libelle": "État 301 — récapitulatif annuel des salaires", "base": "CGI", "periodicite": "A", "echeance": "30/05", "plateforme": "e-impôts", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "e302", "libelle": "État 302 — commissions, honoraires, loyers versés", "base": "CGI", "periodicite": "A", "echeance": "30/05", "plateforme": "e-impôts", "condition": null },
+        { "id": "fne", "libelle": "Facturation normalisée (FNE) sur toutes les ventes", "base": "CGI — annexe fiscale", "periodicite": "C", "plateforme": "FNE", "condition": null }
+      ]
+    },
+    {
+      "code": "cnps",
+      "nom": "Caisse Nationale de Prévoyance Sociale",
+      "branches": ["Prestations familiales", "Assurance maternité", "Accidents du travail et maladies professionnelles", "Retraite"],
+      "obligations": [
+        { "id": "cnps_emp", "libelle": "Immatriculation de l'employeur à la CNPS", "base": "À la première embauche", "periodicite": "P", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cnps_sal", "libelle": "Immatriculation de chaque salarié", "base": "Art. 92.2 du Code du travail", "periodicite": "P", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cnps_cot", "libelle": "Appels et paiement des cotisations sociales (PF, maternité, AT/MP, retraite)", "base": "Art. 92.2 CT", "periodicite": "MT", "jour": 15, "plateforme": "e-CNPS", "regle_mt": "M si effectif >= seuils.cnps_mensuelle_effectif sinon T", "periodicite_conditionnelle": { "si": { "champ": "effectif", "op": ">=", "seuil": "cnps_mensuelle_effectif" }, "alors": "M", "sinon": "T" }, "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cnps_disa", "libelle": "DISA — déclaration individuelle des salaires annuels", "base": "CNPS", "periodicite": "A", "echeance": "30/03", "plateforme": "e-CNPS", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cnps_atmp", "libelle": "Déclaration des accidents de travail et maladies professionnelles (48 h)", "base": "Art. 92.4 CT · décret n°98-38", "periodicite": "E", "plateforme": "e-CNPS", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cnps_prest", "libelle": "Dossiers de prestations familiales et maternité", "base": "Suivi des droits", "periodicite": "E", "plateforme": "e-CNPS", "condition": { "champ": "effectif", "op": ">", "val": 0 } }
+      ]
+    },
+    {
+      "code": "cmu",
+      "nom": "Couverture Maladie Universelle",
+      "obligations": [
+        { "id": "cmu_enr", "libelle": "Enrôlement des employés à la CMU", "base": "Loi n°2014-131", "periodicite": "P", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cmu_ay", "libelle": "Enrôlement des ayants droit (conjoint, enfants)", "base": "Sur événement familial", "periodicite": "E", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cmu_fich", "libelle": "Mise à jour du fichier des bénéficiaires", "base": "Tenue continue", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "cmu_cot", "libelle": "Précompte et reversement des cotisations CMU", "base": "Loi n°2014-131", "periodicite": "M", "jour": 15, "plateforme": "e-CNPS", "condition": { "champ": "effectif", "op": ">", "val": 0 } }
+      ]
+    },
+    {
+      "code": "it",
+      "nom": "Inspection du travail",
+      "source": "Courrier de contrôle n°000018/MEPS/DGT/DI/ITCI — liste non exhaustive · loi n°2015-532 (Code du travail)",
+      "obligations": [
+        { "id": "it_decl", "libelle": "Certificat de déclaration d'entreprise à l'Inspection du ressort", "base": "Art. 92.1 CT", "periodicite": "P", "plateforme": "Inspection du ressort", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "it_mo", "libelle": "Déclaration périodique de la situation de la main-d'œuvre", "base": "Art. 93.1 CT", "periodicite": "A", "echeance": "31/01", "plateforme": "Inspection du ressort", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "reg", "libelle": "Registre employeur tenu à jour", "base": "Art. 92.3 CT", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "paie", "libelle": "Livre de paie et bulletins déchargés", "base": "Art. 32.5 CT · art. 4D54", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "smig", "libelle": "Respect du SMIG et des minima catégoriels", "base": "Décret n°2022-986 · arrêté n°0050/MEPS/CAB du 19/05/2023", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "conges", "libelle": "Calendrier des congés payés et preuve de prise effective", "base": "Art. 25.1 et s. CT", "periodicite": "A", "echeance": "31/01", "plateforme": "Interne", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "vismed", "libelle": "Visites médicales d'embauche et périodiques", "base": "Art. 43.2 CT · décret n°65-210", "periodicite": "A", "echeance": "30/09", "plateforme": "Médecine du travail", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "aff", "libelle": "Affichages obligatoires (consignes, dispositions du CT)", "base": "Art. 7 et 41.7 CT · décret n°98-38", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "pharma", "libelle": "Boîte à pharmacie et boîte de secours", "base": "Art. 4D554 · décret n°65-210", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "hyg", "libelle": "Installations sanitaires, vestiaires, entretien des locaux", "base": "Art. 4D23 · décret n°98-38", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "secu", "libelle": "Registre de sécurité / dangers graves et imminents", "base": "Art. 41.5 CT", "periodicite": "C", "condition": { "champ": "effectif", "op": ">", "val": 0 } },
+        { "id": "ri", "libelle": "Règlement intérieur déposé et affiché", "base": "Art. 16.1 et 16.2 CT", "periodicite": "C", "condition": { "champ": "effectif", "op": ">=", "seuil": "reglement_interieur_effectif" } },
+        { "id": "dp", "libelle": "Délégués du personnel élus · registres et salle de réunion", "base": "Décrets n°2024-901 et n°96-207", "periodicite": "C", "condition": { "champ": "effectif", "op": ">=", "seuil": "delegues_personnel_effectif" } },
+        { "id": "csst", "libelle": "Comité Santé et Sécurité au Travail et affichages", "base": "Art. 42.1–43.4 CT · décret n°2020-955", "periodicite": "C", "condition": { "champ": "effectif", "op": ">=", "seuil": "csst_effectif" } },
+        { "id": "expa", "libelle": "Contrats des salariés expatriés visés (Agence Emploi)", "base": "Décret n°96-287, art. 7", "periodicite": "P", "condition": { "champ": "expatries", "op": "=", "val": true } },
+        { "id": "stage", "libelle": "Contrats de stage et d'apprentissage dûment visés", "base": "Art. 13.1 à 13.20 CT", "periodicite": "P", "condition": { "champ": "stagiaires", "op": "=", "val": true } }
+      ]
+    },
+    {
+      "code": "com",
+      "nom": "Ministère du Commerce (DRAC)",
+      "obligations": [
+        { "id": "drac", "libelle": "Déclaration d'activité commerciale à la DRAC du ressort", "base": "À la création", "periodicite": "P", "condition": { "champ": "vente_consommateurs", "op": "=", "val": true } },
+        { "id": "prix", "libelle": "Affichage des prix et facturation conforme", "base": "Ordonnance n°2013-662 (concurrence)", "periodicite": "C", "condition": { "champ": "vente_consommateurs", "op": "=", "val": true } },
+        { "id": "etiq", "libelle": "Étiquetage et conformité des produits · information du consommateur", "base": "Lois n°2016-410 et n°2016-412", "periodicite": "C", "condition": { "champ": "vente_consommateurs", "op": "=", "val": true } },
+        { "id": "metro", "libelle": "Vérification périodique des instruments de mesure — vignette", "base": "Loi n°2019-989 (métrologie)", "periodicite": "A", "echeance": "15/10", "plateforme": "LANEMA", "condition": { "champ": "instruments_mesure", "op": "=", "val": true } }
+      ]
+    },
+    {
+      "code": "pme",
+      "nom": "Ministère de l'Industrie / PME",
+      "obligations": [
+        { "id": "pme_att", "libelle": "Attestation PME — obtention et renouvellement", "base": "Loi n°2014-140 · décret n°2016-112", "periodicite": "A", "echeance": "12/11", "plateforme": "Guichet PME", "condition": { "champ": "statut_pme", "op": "=", "val": true } }
+      ]
+    },
+    {
+      "code": "mun",
+      "nom": "Commune",
+      "obligations": [
+        { "id": "mun_tax", "libelle": "Taxes communales (ODP, publicité, salubrité…)", "base": "Fiscalité locale — selon la commune du profil", "periodicite": "A", "echeance": "15/01", "plateforme": "Mairie", "condition": null }
+      ]
+    }
+  ]
+}

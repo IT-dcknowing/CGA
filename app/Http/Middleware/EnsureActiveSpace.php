@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\Space;
 use App\Exceptions\ApiException;
 use App\Models\PersonalAccessToken;
 use App\Support\ActiveSpace;
@@ -30,6 +31,11 @@ class EnsureActiveSpace
 
         if ($spaces !== [] && ! in_array($membership->space->value, $spaces, true)) {
             throw ApiException::spaceForbidden();
+        }
+
+        // Q19 : les agents d'un CGA suspendu ne font plus que consulter ; ses adhérents gardent leur accès.
+        if ($membership->space === Space::Cga && ! $request->isMethodSafe() && $membership->cga->isSuspended()) {
+            throw ApiException::cgaSuspended();
         }
 
         $this->activeSpace->set($membership);

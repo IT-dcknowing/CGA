@@ -39,6 +39,26 @@ class ApiException extends Exception implements ShouldntReport
         return new self('account_disabled', 'Ce compte est désactivé.', 403);
     }
 
+    public static function cgaSuspended(): self
+    {
+        return new self('cga_suspended', 'Ce CGA est suspendu : seule la consultation est possible.', 403);
+    }
+
+    public static function cgaAlreadySuspended(): self
+    {
+        return new self('cga_already_suspended', 'Ce CGA est déjà suspendu.', 409);
+    }
+
+    public static function cgaNotSuspended(): self
+    {
+        return new self('cga_not_suspended', "Ce CGA n'est pas suspendu.", 409);
+    }
+
+    public static function settingNotEditable(): self
+    {
+        return new self('setting_not_editable', 'Ce paramètre est fixé par le CNCGA pour tout le réseau.', 403);
+    }
+
     /**
      * Render the exception as an HTTP response.
      */

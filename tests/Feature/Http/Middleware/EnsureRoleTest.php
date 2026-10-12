@@ -5,8 +5,10 @@ namespace Tests\Feature\Http\Middleware;
 use App\Enums\Role;
 use App\Models\Membership;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
+use ValueError;
 
 class EnsureRoleTest extends TestCase
 {
@@ -39,5 +41,19 @@ class EnsureRoleTest extends TestCase
 
         $response->assertForbidden()
             ->assertExactJson(['message' => 'Votre rôle ne permet pas cette action.', 'code' => 'forbidden']);
+    }
+
+    public function test_misspelled_role_in_a_route_fails_instead_of_silently_refusing_everyone(): void
+    {
+        Exceptions::fake();
+        Route::middleware(['api', 'auth:sanctum', 'espace.actif', 'role:gerant,gérant'])
+            ->get('/api/test/misspelled-role', fn (): array => ['ok' => true]);
+        $membership = Membership::factory()->create();
+        $token = $this->createTokenFor($membership->user, $membership);
+
+        $response = $this->withToken($token->plainTextToken)->getJson('/api/test/misspelled-role');
+
+        $response->assertInternalServerError();
+        Exceptions::assertReported(ValueError::class);
     }
 }

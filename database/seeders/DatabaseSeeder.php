@@ -18,8 +18,21 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $cgaAbidjan = Cga::factory()->create(['name' => 'CGA Démo Abidjan', 'abbreviation' => 'DEMOA']);
-        $cgaBouake = Cga::factory()->create(['name' => 'CGA Démo Bouaké', 'abbreviation' => 'DEMOB']);
+        $this->call(ReferenceDataSeeder::class);
+
+        $cgaAbidjan = Cga::factory()->create([
+            'name' => 'CGA Démo Abidjan',
+            'abbreviation' => 'DEMOA',
+            'city' => 'Abidjan',
+            'approval_no' => '000/DEMO/DGI',
+            'approval_date' => '2020-01-15',
+            'approval_expires_at' => '2030-01-15',
+        ]);
+        $cgaBouake = Cga::factory()->pending()->create([
+            'name' => 'CGA Démo Bouaké',
+            'abbreviation' => 'DEMOB',
+            'city' => 'Bouaké',
+        ]);
 
         $presidente = User::factory()->create(['name' => 'Présidente CNCGA', 'phone' => '0700000001']);
         Membership::factory()->for($presidente)->role(Role::Presidente)->create();

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\Role;
 use App\Exceptions\ApiException;
 use App\Support\ActiveSpace;
 use Closure;
@@ -24,7 +25,10 @@ class EnsureRole
         $role = $this->activeSpace->role()
             ?? throw new LogicException('Le middleware « role » doit suivre « espace.actif ».');
 
-        if (! in_array($role->value, $roles, true)) {
+        // Role::from() échoue sur une faute de frappe dans la déclaration de la route.
+        $allowedRoles = array_map(fn (string $role): Role => Role::from($role), $roles);
+
+        if (! in_array($role, $allowedRoles, true)) {
             throw ApiException::roleForbidden();
         }
 

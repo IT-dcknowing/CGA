@@ -3,6 +3,7 @@
 namespace Tests\Feature\Http\Middleware;
 
 use App\Enums\Role;
+use App\Models\Cga;
 use App\Models\Membership;
 use App\Models\User;
 use App\Support\ActiveSpace;
@@ -26,6 +27,39 @@ class EnsureActiveSpaceTest extends TestCase
 
         Route::middleware(['api', 'auth:sanctum', 'espace.actif:cga,adherent'])
             ->get('/api/test/cga-only', fn (): array => ['ok' => true]);
+
+        Route::middleware(['api', 'auth:sanctum', 'espace.actif'])
+            ->post('/api/test/write', fn (): array => ['ok' => true]);
+    }
+
+    public function test_agents_of_a_suspended_cga_can_still_read(): void
+    {
+        $membership = Membership::factory()->for(Cga::factory()->suspended())->create();
+        $token = $this->createTokenFor($membership->user, $membership);
+
+        $response = $this->withToken($token->plainTextToken)->getJson('/api/test/any-space');
+
+        $response->assertOk();
+    }
+
+    public function test_agents_of_a_suspended_cga_get_403_on_writes(): void
+    {
+        $membership = Membership::factory()->for(Cga::factory()->suspended())->create();
+        $token = $this->createTokenFor($membership->user, $membership);
+
+        $response = $this->withToken($token->plainTextToken)->postJson('/api/test/write');
+
+        $response->assertForbidden()->assertJsonPath('code', 'cga_suspended');
+    }
+
+    public function test_adherents_of_a_suspended_cga_keep_their_access(): void
+    {
+        $membership = Membership::factory()->for(Cga::factory()->suspended())->role(Role::Adherent)->create();
+        $token = $this->createTokenFor($membership->user, $membership);
+
+        $response = $this->withToken($token->plainTextToken)->postJson('/api/test/write');
+
+        $response->assertOk();
     }
 
     public function test_exposes_selected_membership_to_the_request(): void
