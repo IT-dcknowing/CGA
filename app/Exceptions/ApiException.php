@@ -19,6 +19,15 @@ class ApiException extends Exception implements ShouldntReport
         parent::__construct($message);
     }
 
+    public static function invalidJson(): self
+    {
+        return new self(
+            'invalid_json',
+            "Le corps de la requête n'est pas un JSON valide : vérifiez les virgules, les guillemets et les variables vides.",
+            400,
+        );
+    }
+
     public static function spaceRequired(): self
     {
         return new self('space_required', 'Choisissez un espace de travail.', 403);
@@ -67,6 +76,50 @@ class ApiException extends Exception implements ShouldntReport
     public static function resetCodeInvalid(): self
     {
         return new self('reset_code_invalid', 'Code invalide ou expiré. Demandez un nouveau code.', 422);
+    }
+
+    public static function adherentNotDraft(): self
+    {
+        return new self('adherent_not_draft', 'Ce dossier a déjà été validé.', 409);
+    }
+
+    public static function adherentNotActive(): self
+    {
+        return new self('adherent_not_active', "Cette action n'est possible que sur un dossier actif.", 409);
+    }
+
+    public static function adherentStruckOff(): self
+    {
+        return new self('adherent_struck_off', 'Un dossier radié ne peut plus être modifié.', 409);
+    }
+
+    public static function adherentNotStruckOff(): self
+    {
+        return new self('adherent_not_struck_off', "Ce dossier n'est pas radié.", 409);
+    }
+
+    public static function strikeOffCancellationExpired(): self
+    {
+        return new self(
+            'strike_off_cancellation_expired',
+            "Le délai d'annulation de la radiation est dépassé : un retour de cet adhérent est une nouvelle adhésion.",
+            409,
+        );
+    }
+
+    public static function nccAlreadyOpen(): self
+    {
+        return new self('ncc_already_open', 'Un autre dossier ouvert porte déjà ce NCC dans votre CGA.', 409);
+    }
+
+    public static function cgaNotApproved(): self
+    {
+        return new self('cga_not_approved', "Le CGA n'a pas encore son agrément : il ne peut pas inscrire d'adhérent.", 409);
+    }
+
+    public static function cgaAbbreviationMissing(): self
+    {
+        return new self('cga_abbreviation_missing', "Renseignez l'abréviation du CGA dans sa fiche avant de valider un dossier.", 409);
     }
 
     public static function settingNotEditable(): self

@@ -157,6 +157,7 @@ La collection `postman/CGA-Connect.postman_collection.json` (avec l'environnemen
 - Utiliser des données qui fonctionnent sur la base de démo (`php artisan migrate:fresh --seed`) et que l'on peut rejouer : noms ou abréviations uniques générés en pré-requête si la route crée des données.
 - Donner à chaque requête une description en français et des tests Postman : statut HTTP, `code` d'erreur, champs clés de la réponse, messages de validation.
 - Si un nouveau rôle ou un nouveau cas a besoin d'un compte de démo, le créer dans `database/seeders/DatabaseSeeder.php` et le connecter dans le dossier « 0. Démarrage ».
+- Chaque dossier doit fonctionner seul, lancé juste après le dossier « 0. Démarrage » : un identifiant de référentiel dont il a besoin se charge dans le dossier 0 (requêtes « Préparation »), jamais dans un autre dossier d'étape.
 - Vérifier sur un serveur lancé (`php artisan serve`) : `npx --yes newman@6.2.1 run postman/CGA-Connect.postman_collection.json -e postman/CGA-Connect-local.postman_environment.json --working-dir .` doit passer sans échec.
 
 Le test `tests/Feature/Routing/PostmanCollectionTest.php` échoue si une route n'a aucune requête dans la collection ou si une requête vise une route qui n'existe plus.

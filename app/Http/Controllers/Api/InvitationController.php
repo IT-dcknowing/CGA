@@ -24,6 +24,7 @@ class InvitationController extends Controller
             email: $request->validated('email'),
             role: $request->role(),
             cga: $request->targetCga(),
+            adherent: $request->targetAdherent(),
             inviter: $request->user(),
         );
 

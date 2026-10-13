@@ -5,6 +5,7 @@ namespace Tests\Feature\Http\Controllers\Api;
 use App\Enums\MembershipStatus;
 use App\Enums\Role;
 use App\Enums\Space;
+use App\Models\Adherent;
 use App\Models\Cga;
 use App\Models\Invitation;
 use App\Models\Membership;
@@ -131,7 +132,7 @@ class InvitationControllerTest extends TestCase
         ]);
     }
 
-    public function test_returns_403_to_cga_roles_other_than_gerant(): void
+    public function test_accountant_can_only_invite_adherents(): void
     {
         $response = $this->withToken($this->tokenForRole(Role::Comptable))->postJson('/api/v1/invitations', [
             'phone' => '0500000001',
@@ -139,7 +140,8 @@ class InvitationControllerTest extends TestCase
             'role' => 'comptable',
         ]);
 
-        $response->assertForbidden()->assertJsonPath('code', 'forbidden');
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['role' => 'Vous ne pouvez pas inviter une personne avec ce rôle.']);
     }
 
     public function test_presidente_invites_the_gerant_of_a_chosen_cga(): void
@@ -196,6 +198,55 @@ class InvitationControllerTest extends TestCase
         ]);
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['role']);
+    }
+
+    public function test_accountant_invites_a_person_of_an_active_adherent_company(): void
+    {
+        Notification::fake();
+        $cga = Cga::factory()->create();
+        $adherent = Adherent::factory()->active()->for($cga)->create(['company_name' => 'Boulangerie du Port']);
+
+        $response = $this->withToken($this->tokenForRole(Role::Comptable, $cga))->postJson('/api/v1/invitations', [
+            'phone' => '0500000001',
+            'name' => 'Dirigeant de la boulangerie',
+            'role' => 'adherent',
+            'adherent_id' => $adherent->id,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.membership.space', 'adherent')
+            ->assertJsonPath('data.membership.adherent_id', $adherent->id);
+        $invited = User::firstWhere('phone', '+2250500000001');
+        Notification::assertSentTo($invited, InvitationNotification::class, fn (InvitationNotification $notification): bool => str_contains($notification->toSms($invited), 'comme adhérent pour Boulangerie du Port'));
+    }
+
+    public function test_adherent_access_needs_an_active_dossier_of_the_same_cga(): void
+    {
+        $cga = Cga::factory()->create();
+        $token = $this->tokenForRole(Role::Gerant, $cga);
+        $draft = Adherent::factory()->for($cga)->create();
+        $otherCgaAdherent = Adherent::factory()->active()->create();
+
+        foreach ([$draft, $otherCgaAdherent] as $adherent) {
+            $this->withToken($token)->postJson('/api/v1/invitations', [
+                'phone' => '0500000001',
+                'name' => 'Dirigeant',
+                'role' => 'adherent',
+                'adherent_id' => $adherent->id,
+            ])->assertUnprocessable()->assertJsonValidationErrors(['adherent_id' => "Choisissez le dossier d'un adhérent actif de votre CGA."]);
+        }
+        $this->assertNull(User::firstWhere('phone', '+2250500000001'));
+    }
+
+    public function test_juriste_cannot_invite_anyone(): void
+    {
+        $response = $this->withToken($this->tokenForRole(Role::Juriste))->postJson('/api/v1/invitations', [
+            'phone' => '0500000001',
+            'name' => 'Dirigeant',
+            'role' => 'adherent',
+        ]);
+
+        $response->assertForbidden();
     }
 
     public function test_disabled_account_cannot_be_invited(): void

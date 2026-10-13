@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\Invitations;
 
+use App\Enums\AdherentStatus;
 use App\Enums\Role;
 use App\Enums\Space;
 use App\Http\Requests\Concerns\NormalizesPhone;
+use App\Models\Adherent;
 use App\Models\Cga;
 use App\Models\User;
 use App\Support\ActiveSpace;
@@ -16,8 +18,8 @@ use Illuminate\Validation\Rule;
  * Qui invite qui :
  * - la Présidente : agents et membres du bureau du CNCGA, et le gérant d'un CGA ;
  * - un agent CNCGA : le gérant d'un CGA ;
- * - un gérant : l'équipe de son CGA (gérant, expert-comptable, comptable, secrétaire, juriste).
- * Les adhérents seront invités depuis leur dossier, à l'étape 4.
+ * - un gérant : l'équipe de son CGA (gérant, expert-comptable, comptable, secrétaire, juriste) ;
+ * - un agent qui inscrit les adhérents : les personnes d'une entreprise adhérente active (Q11).
  */
 class StoreInvitationRequest extends FormRequest
 {
@@ -49,6 +51,14 @@ class StoreInvitationRequest extends FormRequest
                 'integer',
                 Rule::exists(Cga::class, 'id'),
             ],
+            'adherent_id' => [
+                Rule::requiredIf(fn (): bool => $this->input('role') === Role::Adherent->value),
+                'nullable',
+                'integer',
+                Rule::exists(Adherent::class, 'id')
+                    ->where('cga_id', app(ActiveSpace::class)->cgaId())
+                    ->where('status', AdherentStatus::Active->value),
+            ],
         ];
     }
 
@@ -61,6 +71,8 @@ class StoreInvitationRequest extends FormRequest
             'phone.regex' => "Le numéro de téléphone n'est pas valide.",
             'role.in' => 'Vous ne pouvez pas inviter une personne avec ce rôle.',
             'cga_id.required' => 'Choisissez le CGA dont cette personne sera le gérant.',
+            'adherent_id.required' => "Choisissez le dossier de l'entreprise adhérente.",
+            'adherent_id.exists' => "Choisissez le dossier d'un adhérent actif de votre CGA.",
         ];
     }
 
@@ -73,6 +85,7 @@ class StoreInvitationRequest extends FormRequest
             'name' => 'nom',
             'role' => 'rôle',
             'cga_id' => 'CGA',
+            'adherent_id' => 'dossier adhérent',
         ];
     }
 
@@ -97,6 +110,14 @@ class StoreInvitationRequest extends FormRequest
     }
 
     /**
+     * Le dossier de l'entreprise pour un accès adhérent.
+     */
+    public function targetAdherent(): ?Adherent
+    {
+        return $this->role() === Role::Adherent ? Adherent::findOrFail($this->validated('adherent_id')) : null;
+    }
+
+    /**
      * @return list<Role>
      */
     private function invitableRoles(): array
@@ -104,7 +125,8 @@ class StoreInvitationRequest extends FormRequest
         return match (app(ActiveSpace::class)->role()) {
             Role::Presidente => [Role::AgentCncga, Role::MembreBureau, Role::Gerant],
             Role::AgentCncga => [Role::Gerant],
-            Role::Gerant => [Role::Gerant, Role::ExpertComptable, Role::Comptable, Role::Secretaire, Role::Juriste],
+            Role::Gerant => [Role::Gerant, Role::ExpertComptable, Role::Comptable, Role::Secretaire, Role::Juriste, Role::Adherent],
+            Role::ExpertComptable, Role::Comptable, Role::Secretaire => [Role::Adherent],
             default => [],
         };
     }

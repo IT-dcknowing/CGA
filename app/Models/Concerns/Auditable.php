@@ -12,6 +12,23 @@ use Illuminate\Support\Arr;
  */
 trait Auditable
 {
+    /**
+     * Précisions jointes à la prochaine modification inscrite au journal (par exemple un justificatif).
+     *
+     * @var array<string, mixed>
+     */
+    protected array $auditContext = [];
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function withAuditContext(array $context): static
+    {
+        $this->auditContext = $context;
+
+        return $this;
+    }
+
     public static function bootAuditable(): void
     {
         static::created(function (Model $model): void {
@@ -28,7 +45,9 @@ trait Auditable
             ActivityLog::record('updated', $model, [
                 'old' => Arr::only($model->getPrevious(), array_keys($changes)),
                 'new' => $changes,
+                ...$model->auditContext,
             ]);
+            $model->auditContext = [];
         });
 
         static::deleted(function (Model $model): void {

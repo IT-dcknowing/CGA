@@ -51,6 +51,16 @@ class Membership extends Model
                     "Le rôle « {$membership->role->value} » ".($membership->space->requiresCga() ? 'exige' : 'interdit').' un CGA.'
                 );
             }
+
+            $isAdherentSpace = $membership->space === Space::Adherent;
+
+            if ($isAdherentSpace !== ($membership->adherent_id !== null)) {
+                throw new LogicException('Un accès adhérent, et lui seul, est rattaché à un dossier adhérent.');
+            }
+
+            if ($isAdherentSpace && (int) Adherent::withoutGlobalScopes()->whereKey($membership->adherent_id)->value('cga_id') !== (int) $membership->cga_id) {
+                throw new LogicException("Le dossier adhérent n'appartient pas au CGA de cet accès.");
+            }
         });
     }
 
@@ -68,6 +78,14 @@ class Membership extends Model
     public function cga(): BelongsTo
     {
         return $this->belongsTo(Cga::class);
+    }
+
+    /**
+     * @return BelongsTo<Adherent, $this>
+     */
+    public function adherent(): BelongsTo
+    {
+        return $this->belongsTo(Adherent::class);
     }
 
     /**

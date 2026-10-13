@@ -11,6 +11,11 @@ trait NormalizesPhone
 {
     protected function prepareForValidation(): void
     {
+        $this->normalizePhone();
+    }
+
+    protected function normalizePhone(): void
+    {
         if (is_string($this->input('phone'))) {
             $this->merge(['phone' => PhoneNumber::normalize($this->input('phone'))]);
         }

@@ -2,13 +2,13 @@
     "info": {
         "_postman_id": "6a0f3c9e-2b1d-4c7a-9f51-0c4e8d2b7a13",
         "name": "CGA Connect API",
-        "description": "Requêtes et jeux de données de chaque route de l'API CGA Connect (`/api/v1`), avec des tests automatiques sur chaque réponse.\n\n**Avant de lancer**\n1. `php artisan migrate:fresh --seed` : recrée la base locale avec les comptes et données de démo.\n2. `php artisan serve` : l'API écoute sur `http://127.0.0.1:8000`.\n3. Importez cette collection et l'environnement `CGA Connect — local`, puis sélectionnez l'environnement.\n\n**Ordre** : lancez d'abord le dossier « 0. Démarrage » : il connecte les comptes de démo et range leurs jetons dans les variables de collection. Les dossiers suivants s'exécutent ensuite dans l'ordre, avec le Collection Runner ou en ligne de commande :\n`npx --yes newman@6.2.1 run postman/CGA-Connect.postman_collection.json -e postman/CGA-Connect-local.postman_environment.json --working-dir .`\n\n**Comptes de démo** (mot de passe `password`) : 0700000001 Présidente · 0700000002 gérant DEMOA · 0700000003 expert-comptable DEMOA et DEMOB · 0700000004 agent CNCGA · 0700000005 membre du bureau · 0700000006 comptable DEMOA · 0700000007 adhérent DEMOA · 0700000008 gérant du CGA suspendu DEMOS · 0700000009 compte désactivé · 0700000010 invité sans mot de passe.\n\n**SMS en local** : aucun SMS ne part (`SMS_DRIVER=log`) ; chaque message est écrit dans `storage/logs/sms.log` et recopié dans `dev_sms` de la réponse, ce qui permet aux requêtes de récupérer le lien d'invitation et le code de réinitialisation.\n\n**Limites** : 5 connexions par minute pour un même numéro, 10 activations d'invitation par minute. Attendez une minute entre deux exécutions complètes.\n\n**Mise à jour** : chaque nouvelle route doit être ajoutée ici avec son cas nominal et ses cas d'erreur. Le test `tests/Feature/Routing/PostmanCollectionTest.php` échoue sinon.",
+        "description": "Requêtes et jeux de données de chaque route de l'API CGA Connect (`/api/v1`), avec des tests automatiques sur chaque réponse.\n\n**Avant de lancer**\n1. `php artisan migrate:fresh --seed` : recrée la base locale avec les comptes et données de démo.\n2. `php artisan serve` : l'API écoute sur `http://127.0.0.1:8000`.\n3. Importez cette collection et l'environnement `CGA Connect — local`, puis sélectionnez l'environnement.\n\n**Ordre** : lancez toujours d'abord le dossier « 0. Démarrage » : il connecte les comptes de démo et range leurs jetons et les identifiants des référentiels dans les variables de collection. Ensuite, chaque dossier fonctionne seul ; à l'intérieur d'un dossier, lancez les requêtes dans l'ordre, car certaines réutilisent ce que les précédentes ont créé. Pour tout exécuter, utilisez le Collection Runner ou la ligne de commande :\n`npx --yes newman@6.2.1 run postman/CGA-Connect.postman_collection.json -e postman/CGA-Connect-local.postman_environment.json --working-dir .`\n\n**Comptes de démo** (mot de passe `password`) : 0700000001 Présidente · 0700000002 gérant DEMOA · 0700000003 expert-comptable DEMOA et DEMOB · 0700000004 agent CNCGA · 0700000005 membre du bureau · 0700000006 comptable DEMOA · 0700000007 adhérent DEMOA · 0700000008 gérant du CGA suspendu DEMOS · 0700000009 compte désactivé · 0700000010 invité sans mot de passe.\n\n**SMS en local** : aucun SMS ne part (`SMS_DRIVER=log`) ; chaque message est écrit dans `storage/logs/sms.log` et recopié dans `dev_sms` de la réponse, ce qui permet aux requêtes de récupérer le lien d'invitation et le code de réinitialisation.\n\n**Limites** : 5 connexions par minute pour un même numéro, 10 activations d'invitation par minute. Attendez une minute entre deux exécutions complètes.\n\n**Mise à jour** : chaque nouvelle route doit être ajoutée ici avec son cas nominal et ses cas d'erreur. Le test `tests/Feature/Routing/PostmanCollectionTest.php` échoue sinon.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "item": [
         {
-            "name": "0. Démarrage — connexion des comptes de démo",
-            "description": "À lancer en premier : range le jeton de chaque compte de démo dans une variable de collection.",
+            "name": "0. Démarrage — comptes de démo et référentiels",
+            "description": "À lancer en premier, et après chaque `migrate:fresh --seed` : range le jeton de chaque compte de démo et les identifiants des référentiels dans les variables de collection.",
             "item": [
                 {
                     "name": "Connexion — Présidente CNCGA",
@@ -491,6 +491,196 @@
                         }
                     },
                     "response": []
+                },
+                {
+                    "name": "Préparation — régimes",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.response.json().data.forEach(r => pm.collectionVariables.set(\"regime_\" + r.code.toLowerCase() + \"_id\", r.id));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/ref/regimes",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "ref",
+                                "regimes"
+                            ]
+                        },
+                        "description": "Range les identifiants des régimes RME, TEE et RSI (`regime_rme_id`…).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Préparation — secteurs",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.collectionVariables.set(\"sector_commerce_id\", pm.response.json().data.find(s => s.code === \"COM001\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/ref/sectors",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "ref",
+                                "sectors"
+                            ]
+                        },
+                        "description": "Range l'identifiant du secteur « Commerce général » (`sector_commerce_id`).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Préparation — directions régionales et centres des impôts",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const regions = pm.response.json().data;",
+                                    "const dr1 = regions.find(r => r.code === \"DEMO-DR1\");",
+                                    "pm.collectionVariables.set(\"tax_region_id\", dr1.id);",
+                                    "pm.collectionVariables.set(\"tax_center_id\", dr1.centers.find(c => c.code === \"DEMO-CDI1\").id);",
+                                    "pm.collectionVariables.set(\"tax_center_autre_region\", regions.find(r => r.code === \"DEMO-DR2\").centers[0].id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/ref/tax-centers",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "ref",
+                                "tax-centers"
+                            ]
+                        },
+                        "description": "Range les identifiants de la direction et des centres de démo (`tax_region_id`, `tax_center_id`, `tax_center_autre_region`).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Préparation — motifs de radiation",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const reasons = pm.response.json().data;",
+                                    "pm.collectionVariables.set(\"reason_reclassement_id\", reasons.find(r => r.code === \"reclassement_regime_reel\").id);",
+                                    "pm.collectionVariables.set(\"reason_manquements_id\", reasons.find(r => r.code === \"manquements_graves\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/ref/strike-off-reasons",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "ref",
+                                "strike-off-reasons"
+                            ]
+                        },
+                        "description": "Range les identifiants des motifs utilisés par les radiations (`reason_reclassement_id`, `reason_manquements_id`).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
                 }
             ]
         },
@@ -909,6 +1099,58 @@
                         "body": {
                             "mode": "raw",
                             "raw": "{\n    \"phone\": \"07 00\",\n    \"password\": \"password\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Connexion — corps JSON mal formé",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 400\", () => pm.response.to.have.status(400));",
+                                    "pm.test(\"Code d'erreur « invalid_json »\", () => pm.expect(pm.response.json().code).to.eql(\"invalid_json\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Un corps qui n'est pas du JSON valide (virgule en trop, variable Postman vide…) est refusé avec une erreur 400, sur toutes les routes, au lieu d'être ignoré.",
+                        "auth": {
+                            "type": "noauth"
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"phone\": ,\n    \"password\": \"password\"\n}",
                             "options": {
                                 "raw": {
                                     "language": "json"
@@ -1994,15 +2236,15 @@
                     "response": []
                 },
                 {
-                    "name": "Inviter — refusé au comptable",
+                    "name": "Inviter — un comptable n'invite que des adhérents",
                     "event": [
                         {
                             "listen": "test",
                             "script": {
                                 "type": "text/javascript",
                                 "exec": [
-                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
-                                    "pm.test(\"Code d'erreur « forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"forbidden\"));"
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « role »\", () => pm.expect(pm.response.json().errors[\"role\"][0]).to.eql(\"Vous ne pouvez pas inviter une personne avec ce rôle.\"));"
                                 ]
                             }
                         }
@@ -2028,7 +2270,7 @@
                                 "invitations"
                             ]
                         },
-                        "description": "Dans un CGA, seul le gérant invite.",
+                        "description": "Seul le gérant invite l'équipe du CGA. Un comptable, un expert-comptable ou une secrétaire n'invitent que les personnes des entreprises adhérentes (voir le dossier « Étape 4 »).",
                         "auth": {
                             "type": "bearer",
                             "bearer": [
@@ -2735,7 +2977,8 @@
                                 "exec": [
                                     "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
                                     "pm.test(\"RME, TEE, RSI\", () => { const json = pm.response.json(); pm.expect(json.data.map(r => r.code)).to.eql([\"RME\", \"TEE\", \"RSI\"]); });",
-                                    "pm.test(\"Seuls RME et TEE ouvrent l'adhésion\", () => { const json = pm.response.json(); pm.expect(json.data.map(r => r.allows_membership)).to.eql([true, true, false]); });"
+                                    "pm.test(\"Seuls RME et TEE ouvrent l'adhésion\", () => { const json = pm.response.json(); pm.expect(json.data.map(r => r.allows_membership)).to.eql([true, true, false]); });",
+                                    "pm.response.json().data.forEach(r => pm.collectionVariables.set(\"regime_\" + r.code.toLowerCase() + \"_id\", r.id));"
                                 ]
                             }
                         }
@@ -2781,7 +3024,8 @@
                                 "type": "text/javascript",
                                 "exec": [
                                     "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
-                                    "pm.test(\"8 secteurs\", () => { const json = pm.response.json(); pm.expect(json.data).to.have.lengthOf(8); });"
+                                    "pm.test(\"8 secteurs\", () => { const json = pm.response.json(); pm.expect(json.data).to.have.lengthOf(8); });",
+                                    "pm.collectionVariables.set(\"sector_commerce_id\", pm.response.json().data.find(s => s.code === \"COM001\").id);"
                                 ]
                             }
                         }
@@ -2880,7 +3124,10 @@
                                 "exec": [
                                     "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
                                     "pm.test(\"9 motifs\", () => { const json = pm.response.json(); pm.expect(json.data).to.have.lengthOf(9); });",
-                                    "pm.test(\"Pièce obligatoire pour les manquements graves\", () => { const json = pm.response.json(); pm.expect(json.data.find(r => r.code === \"manquements_graves\").requires_document).to.be.true; });"
+                                    "pm.test(\"Pièce obligatoire pour les manquements graves\", () => { const json = pm.response.json(); pm.expect(json.data.find(r => r.code === \"manquements_graves\").requires_document).to.be.true; });",
+                                    "const reasons = pm.response.json().data;",
+                                    "pm.collectionVariables.set(\"reason_reclassement_id\", reasons.find(r => r.code === \"reclassement_regime_reel\").id);",
+                                    "pm.collectionVariables.set(\"reason_manquements_id\", reasons.find(r => r.code === \"manquements_graves\").id);"
                                 ]
                             }
                         }
@@ -5939,6 +6186,2276 @@
                     "response": []
                 }
             ]
+        },
+        {
+            "name": "6. Étape 4 — Adhérents",
+            "description": "Dossiers des adhérents : brouillon, validation et numéro, modifications historisées, régimes, radiation et annulation, cloisonnement entre CGA, accès des entreprises adhérentes (Q21 à Q37).",
+            "item": [
+                {
+                    "name": "Liste des adhérents",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossiers de démo présents\", () => { const json = pm.response.json(); pm.expect(json.meta.total).to.be.at.least(3); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Tous les dossiers du CGA de l'espace choisi, triés par raison sociale, 25 par page. Filtres : `status` (draft, active, struck_off), `regime_id`, `sector_id`, `search` (raison sociale, nom commercial, NCC, numéro, téléphone).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Liste — brouillons à compléter",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Uniquement des brouillons\", () => pm.expect(json.data.every(a => a.status === \"draft\")).to.be.true);",
+                                    "pm.collectionVariables.set(\"draft_adherent_id\", json.data.find(a => a.company_name === \"Atelier Couture Awa\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents?status=draft&search=atelier",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "draft"
+                                },
+                                {
+                                    "key": "search",
+                                    "value": "atelier"
+                                }
+                            ]
+                        },
+                        "description": "La file des « dossiers à compléter » (Q24), ici filtrée sur le brouillon de démo.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Liste — recherche par nom",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const bakery = pm.response.json().data.find(a => a.company_name === \"Boulangerie Le Bon Pain\");",
+                                    "pm.test(\"Boulangerie trouvée\", () => pm.expect(bakery).to.be.an(\"object\"));",
+                                    "pm.collectionVariables.set(\"bakery_id\", bakery.id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents?search=boulangerie",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ],
+                            "query": [
+                                {
+                                    "key": "search",
+                                    "value": "boulangerie"
+                                }
+                            ]
+                        },
+                        "description": "Recherche sans tenir compte des majuscules.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Consulter un dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Numéro et régime\", () => { const json = pm.response.json(); pm.expect(json.data.member_no).to.eql(\"2026-DEMOA-0001\"); pm.expect(json.data.regime.code).to.eql(\"RME\"); pm.expect(json.data.regime_history.length).to.be.at.least(1); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}"
+                            ]
+                        },
+                        "description": "Dossier complet, avec son historique de régimes.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Liste — refusée dans l'espace CNCGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « space_forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"space_forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Le CNCGA ne voit jamais les dossiers nominatifs des adhérents (Q15).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_presidente}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Créer un brouillon (comptable)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.collectionVariables.set(\"postman_ncc\", Date.now().toString().slice(-7) + \" P\");"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 201\", () => pm.response.to.have.status(201));",
+                                    "const json = pm.response.json();",
+                                    "pm.collectionVariables.set(\"new_adherent_id\", json.data.id);",
+                                    "pm.test(\"Brouillon sans numéro\", () => { pm.expect(json.data.status).to.eql(\"draft\"); pm.expect(json.data.member_no).to.be.null; });",
+                                    "pm.test(\"Champs manquants listés\", () => { pm.expect(json.data.completeness.ready).to.be.false; pm.expect(json.data.completeness.missing).to.include(\"regime_id\"); });",
+                                    "pm.test(\"Droit d'adhésion par défaut\", () => pm.expect(json.data.membership_fee).to.be.a(\"number\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Inscription par le CGA (Q21) : seule la raison sociale est obligatoire pour enregistrer un brouillon sans numéro (Q24). Le droit d'adhésion par défaut du CGA est repris (Q40). `completeness.missing` liste ce qui manque pour valider. Le NCC change à chaque exécution.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Commerce Postman {{postman_ncc}}\",\n    \"legal_form\": \"sarl\",\n    \"ncc\": \"{{postman_ncc}}\",\n    \"phone\": \"05 06 07 08 09\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Créer — NCC déjà ouvert dans le CGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « ncc »\", () => pm.expect(pm.response.json().errors[\"ncc\"][0]).to.eql(\"Un dossier ouvert porte déjà ce NCC dans votre CGA.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Doublon strict au sein d'un même CGA (Q25) : la boulangerie de démo porte déjà ce NCC. Le NCC est comparé en majuscules.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Doublon\",\n    \"ncc\": \"0000001 a\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Créer — raison sociale manquante",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « company_name »\", () => pm.expect(pm.response.json().errors[\"company_name\"][0]).to.eql(\"Le champ raison sociale est obligatoire.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Corps vide.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Créer — CGA suspendu",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « cga_suspended »\", () => pm.expect(pm.response.json().code).to.eql(\"cga_suspended\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Un CGA suspendu ne peut plus que consulter (Q19).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant_suspendu}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Essai\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Valider — dossier incomplet",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Champs manquants signalés\", () => { const json = pm.response.json(); pm.expect(json.errors).to.have.property(\"regime_id\"); pm.expect(json.errors.regime_id[0]).to.eql(\"Ce champ est obligatoire pour valider le dossier.\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/validate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "validate"
+                            ]
+                        },
+                        "description": "Chaque champ obligatoire manquant (Q22) est signalé.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Compléter le brouillon (comptable)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossier complet\", () => { const json = pm.response.json(); pm.expect(json.data.completeness.ready).to.be.true; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}"
+                            ]
+                        },
+                        "description": "Les champs exigés par Q22 sont renseignés : le dossier est prêt à être validé.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"regime_id\": {{regime_rme_id}},\n    \"sector_id\": {{sector_commerce_id}},\n    \"activity\": \"Commerce de détail\",\n    \"tax_center_id\": {{tax_center_id}},\n    \"address\": \"Marcory, Abidjan\",\n    \"commune\": \"Marcory\",\n    \"signatory_name\": \"Dirigeant Postman\",\n    \"signatory_title\": \"Gérant\",\n    \"turnover\": 15000000,\n    \"turnover_basis\": \"previous_year\",\n    \"employees\": 3,\n    \"joined_at\": \"2026-04-01\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Valider le dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Dossier actif et numéroté\", () => { pm.expect(json.data.status).to.eql(\"active\"); pm.expect(json.data.member_no).to.match(/^2026-DEMOA-\\d{4}$/); });",
+                                    "pm.collectionVariables.set(\"new_member_no\", json.data.member_no);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/validate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "validate"
+                            ]
+                        },
+                        "description": "Le numéro est attribué à la validation (Q27) : année d'adhésion, abréviation du CGA, séquence continue du CGA. Un dossier repris d'un ancien registre peut garder son numéro avec `historical_member_no` (Q26).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Valider — dossier déjà validé",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 409\", () => pm.response.to.have.status(409));",
+                                    "pm.test(\"Code d'erreur « adherent_not_draft »\", () => pm.expect(pm.response.json().code).to.eql(\"adherent_not_draft\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/validate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "validate"
+                            ]
+                        },
+                        "description": "Un dossier ne se valide qu'une fois.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Modifier — raison sociale sans justificatif",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « change_justification »\", () => pm.expect(pm.response.json().errors[\"change_justification\"][0]).to.eql(\"Un justificatif est obligatoire pour changer la raison sociale ou le NCC d'un dossier validé.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}"
+                            ]
+                        },
+                        "description": "Sur un dossier validé, changer la raison sociale ou le NCC demande un justificatif (Q32).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Commerce Postman renommé\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Modifier — raison sociale avec justificatif",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Nouvelle raison sociale\", () => { const json = pm.response.json(); pm.expect(json.data.company_name).to.eql(\"Commerce Postman renommé\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}"
+                            ]
+                        },
+                        "description": "L'ancienne valeur, la nouvelle et le justificatif sont gardés dans l'historique.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Commerce Postman renommé\",\n    \"change_justification\": \"Extrait RCCM modifié du 02/05/2026\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Modifier — régime par une simple modification",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « regime_id »\", () => pm.expect(pm.response.json().errors[\"regime_id\"][0]).to.eql(\"Le régime d'un dossier validé se change par le changement de régime, daté et motivé.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}"
+                            ]
+                        },
+                        "description": "Une fois le dossier validé, le régime se change par la route dédiée, datée et motivée.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"regime_id\": {{regime_tee_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Changer de régime — RME vers TEE",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Régime TEE et historique\", () => { const json = pm.response.json(); pm.expect(json.data.regime.code).to.eql(\"TEE\"); pm.expect(json.data.regime_history).to.have.lengthOf(2); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/regime",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "regime"
+                            ]
+                        },
+                        "description": "Changement daté et motivé (Q30), gardé dans l'historique des régimes pour les états de surclassement du rapport trimestriel.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"regime_id\": {{regime_tee_id}},\n    \"effective_date\": \"2026-06-01\",\n    \"reason\": \"Chiffre d'affaires sous le seuil du RME\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Changer de régime — même régime",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « regime_id »\", () => pm.expect(pm.response.json().errors[\"regime_id\"][0]).to.eql(\"L'adhérent est déjà à ce régime.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/regime",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "regime"
+                            ]
+                        },
+                        "description": "L'adhérent est déjà au TEE.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"regime_id\": {{regime_tee_id}},\n    \"effective_date\": \"2026-06-15\",\n    \"reason\": \"Essai\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Changer de régime — passage au RSI",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Alerte RSI\", () => { const json = pm.response.json(); pm.expect(json.data.alerts[0].code).to.eql(\"rsi_regularization\"); pm.expect(json.data.alerts[0].deadline).to.eql(\"2026-09-29\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/regime",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "regime"
+                            ]
+                        },
+                        "description": "Un adhérent passé au RSI doit être régularisé ou radié (C6, Q31) : le dossier porte une alerte avec la date limite (90 jours, paramètre « à confirmer »).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"regime_id\": {{regime_rsi_id}},\n    \"effective_date\": \"2026-07-01\",\n    \"reason\": \"Reclassement par la DGI\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Historique du dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Événements attendus\", () => { const json = pm.response.json(); const events = json.data.map(e => e.event); [\"created\", \"updated\", \"validated\", \"regime_changed\"].forEach(e => pm.expect(events).to.include(e)); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/history",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "history"
+                            ]
+                        },
+                        "description": "Création, modifications champ par champ (auteur, date, ancienne et nouvelle valeur), validation, changements de régime (Q32).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Radier — refusé au comptable",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off"
+                            ]
+                        },
+                        "description": "Seuls le gérant et l'expert-comptable radient (Q10, Q35).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "reason_id",
+                                    "value": "{{reason_reclassement_id}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "observation",
+                                    "value": "Essai",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "effective_date",
+                                    "value": "2026-09-30",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Radier — manquements graves sans pièce",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « document »\", () => pm.expect(pm.response.json().errors[\"document\"][0]).to.eql(\"Une pièce justificative est obligatoire pour ce motif (procès-verbal de la commission de résiliation).\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off"
+                            ]
+                        },
+                        "description": "Pour ce motif, le procès-verbal de la commission est obligatoire (Q35).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "reason_id",
+                                    "value": "{{reason_manquements_id}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "observation",
+                                    "value": "Refus répété de fournir les pièces comptables",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "effective_date",
+                                    "value": "2026-09-30",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Radier — observation manquante",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « observation »\", () => pm.expect(pm.response.json().errors[\"observation\"][0]).to.eql(\"Le champ observation est obligatoire.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off"
+                            ]
+                        },
+                        "description": "L'observation est obligatoire (Q35).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "reason_id",
+                                    "value": "{{reason_reclassement_id}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "effective_date",
+                                    "value": "2026-09-30",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Radier un adhérent",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossier radié\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"struck_off\"); pm.expect(json.data.strike_off.reason.code).to.eql(\"reclassement_regime_reel\"); pm.expect(json.data.strike_off.cancellable_until).to.be.a(\"string\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off"
+                            ]
+                        },
+                        "description": "Seule la décision finale est enregistrée : motif, date d'effet, observation, pièce éventuelle (Q35). Envoi en multipart/form-data.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "reason_id",
+                                    "value": "{{reason_reclassement_id}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "observation",
+                                    "value": "Adhérent reclassé au régime réel",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "effective_date",
+                                    "value": "2026-09-30",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Modifier — dossier radié",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 409\", () => pm.response.to.have.status(409));",
+                                    "pm.test(\"Code d'erreur « adherent_struck_off »\", () => pm.expect(pm.response.json().code).to.eql(\"adherent_struck_off\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}"
+                            ]
+                        },
+                        "description": "Un dossier radié ne se modifie plus.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"address\": \"Nouvelle adresse\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Annuler la radiation — refusé à l'expert-comptable",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off/cancel",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off",
+                                "cancel"
+                            ]
+                        },
+                        "description": "L'annulation est réservée au gérant (Q37).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"reason\": \"Erreur de saisie\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Annuler la radiation",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossier rétabli avec son numéro\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"active\"); pm.expect(json.data.member_no).to.eql(pm.collectionVariables.get(\"new_member_no\")); pm.expect(json.data.strike_off).to.be.null; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off/cancel",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off",
+                                "cancel"
+                            ]
+                        },
+                        "description": "Dans les 30 jours (paramètre « strike_off_cancellation_days »), le dossier revient à l'identique, avec son numéro (Q37). Au-delà : 409 strike_off_cancellation_expired.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"reason\": \"Radiation enregistrée par erreur\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Annuler — dossier qui n'est pas radié",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 409\", () => pm.response.to.have.status(409));",
+                                    "pm.test(\"Code d'erreur « adherent_not_struck_off »\", () => pm.expect(pm.response.json().code).to.eql(\"adherent_not_struck_off\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off/cancel",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off",
+                                "cancel"
+                            ]
+                        },
+                        "description": "Rien à annuler.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"reason\": \"Essai\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Radier avec pièce (manquements graves)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Pièce enregistrée\", () => { const json = pm.response.json(); pm.expect(json.data.strike_off.has_document).to.be.true; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off"
+                            ]
+                        },
+                        "description": "La pièce (PDF, JPEG ou PNG, 5 Mo au plus) est rangée sur le disque privé. Dans l'application Postman, sélectionnez `postman/fichiers/pv-commission-demo.pdf` si le fichier n'est pas trouvé.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "reason_id",
+                                    "value": "{{reason_manquements_id}}",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "observation",
+                                    "value": "Refus répété de fournir les pièces comptables",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "effective_date",
+                                    "value": "2026-09-30",
+                                    "type": "text"
+                                },
+                                {
+                                    "key": "document",
+                                    "type": "file",
+                                    "src": "postman/fichiers/pv-commission-demo.pdf"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Télécharger la pièce de radiation",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Document PDF\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/pdf\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{new_adherent_id}}/strike-off/document",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{new_adherent_id}}",
+                                "strike-off",
+                                "document"
+                            ]
+                        },
+                        "description": "Tout agent du CGA peut consulter la pièce.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cloisonnement — l'expert passe sur DEMOB",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/auth/switch-space",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "switch-space"
+                            ]
+                        },
+                        "description": "Préparation du test de cloisonnement : l'expert-comptable, qui a accès aux deux CGA, ouvre DEMOB.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"membership_id\": {{membership_expert_demob}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cloisonnement — adhérents de DEMOB",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Aucun dossier de DEMOA\", () => pm.expect(json.data.map(a => a.company_name)).to.not.include(\"Boulangerie Le Bon Pain\"));",
+                                    "pm.collectionVariables.set(\"other_cga_adherent_id\", json.data.find(a => a.company_name === \"Maquis Démo Bouaké\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Dans DEMOB, seuls les dossiers de DEMOB sont visibles.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cloisonnement — l'expert revient sur DEMOA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/auth/switch-space",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "switch-space"
+                            ]
+                        },
+                        "description": "Retour sur l'accès principal.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"membership_id\": {{membership_expert_demoa}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cloisonnement — consulter un dossier d'un autre CGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 404\", () => pm.response.to.have.status(404));",
+                                    "pm.test(\"Code d'erreur « not_found »\", () => pm.expect(pm.response.json().code).to.eql(\"not_found\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{other_cga_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{other_cga_adherent_id}}"
+                            ]
+                        },
+                        "description": "Le gérant de DEMOA demande un dossier de DEMOB par son identifiant : 404, comme s'il n'existait pas (Q15, Q16).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cloisonnement — modifier un dossier d'un autre CGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 404\", () => pm.response.to.have.status(404));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{other_cga_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{other_cga_adherent_id}}"
+                            ]
+                        },
+                        "description": "Même réponse en écriture : rien n'est modifié.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Tentative\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Inviter le dirigeant d'une entreprise adhérente (comptable)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.collectionVariables.set(\"adherent_phone\", \"05\" + Date.now().toString().slice(-8));"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 201\", () => pm.response.to.have.status(201));",
+                                    "pm.test(\"Accès adhérent\", () => { const json = pm.response.json(); pm.expect(json.data.membership.space).to.eql(\"adherent\"); pm.expect(json.dev_sms.message).to.include(\"pour Boulangerie Le Bon Pain\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/invitations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "invitations"
+                            ]
+                        },
+                        "description": "Plusieurs accès par entreprise, à la main du CGA (Q11) : tout agent qui inscrit les adhérents invite les personnes d'une entreprise active.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"phone\": \"{{adherent_phone}}\",\n    \"name\": \"Dirigeant invité Postman\",\n    \"role\": \"adherent\",\n    \"adherent_id\": {{bakery_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Inviter — dossier d'un autre CGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « adherent_id »\", () => pm.expect(pm.response.json().errors[\"adherent_id\"][0]).to.eql(\"Choisissez le dossier d'un adhérent actif de votre CGA.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/invitations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "invitations"
+                            ]
+                        },
+                        "description": "Le dossier doit appartenir au CGA de l'espace choisi.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"phone\": \"0100000006\",\n    \"name\": \"Essai\",\n    \"role\": \"adherent\",\n    \"adherent_id\": {{other_cga_adherent_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Inviter — dossier en brouillon",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « adherent_id »\", () => pm.expect(pm.response.json().errors[\"adherent_id\"][0]).to.eql(\"Choisissez le dossier d'un adhérent actif de votre CGA.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/invitations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "invitations"
+                            ]
+                        },
+                        "description": "Seul un dossier validé ouvre des accès.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"phone\": \"0100000007\",\n    \"name\": \"Essai\",\n    \"role\": \"adherent\",\n    \"adherent_id\": {{draft_adherent_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Mon dossier (espace adhérent)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossier de la boulangerie\", () => { const json = pm.response.json(); pm.expect(json.data.company_name).to.eql(\"Boulangerie Le Bon Pain\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/dossier",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "dossier"
+                            ]
+                        },
+                        "description": "L'adhérent consulte le dossier de son entreprise ; il ne le modifie pas, il signale les changements à son CGA (Q32).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Mon dossier — refusé à un agent du CGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « space_forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"space_forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/dossier",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "dossier"
+                            ]
+                        },
+                        "description": "Route réservée à l'espace adhérent.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
         }
     ],
     "variable": [
@@ -6056,6 +8573,58 @@
         },
         {
             "key": "reset_code_wrong",
+            "value": ""
+        },
+        {
+            "key": "regime_rme_id",
+            "value": ""
+        },
+        {
+            "key": "regime_tee_id",
+            "value": ""
+        },
+        {
+            "key": "regime_rsi_id",
+            "value": ""
+        },
+        {
+            "key": "sector_commerce_id",
+            "value": ""
+        },
+        {
+            "key": "reason_reclassement_id",
+            "value": ""
+        },
+        {
+            "key": "reason_manquements_id",
+            "value": ""
+        },
+        {
+            "key": "draft_adherent_id",
+            "value": ""
+        },
+        {
+            "key": "bakery_id",
+            "value": ""
+        },
+        {
+            "key": "postman_ncc",
+            "value": ""
+        },
+        {
+            "key": "new_adherent_id",
+            "value": ""
+        },
+        {
+            "key": "new_member_no",
+            "value": ""
+        },
+        {
+            "key": "other_cga_adherent_id",
+            "value": ""
+        },
+        {
+            "key": "adherent_phone",
             "value": ""
         }
     ]

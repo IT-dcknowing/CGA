@@ -7,6 +7,7 @@ use App\Enums\Role;
 use App\Enums\SettingKey;
 use App\Exceptions\ApiException;
 use App\Models\ActivityLog;
+use App\Models\Adherent;
 use App\Models\Cga;
 use App\Models\Invitation;
 use App\Models\Membership;
@@ -28,9 +29,9 @@ class Invitations
      * La personne est retrouvée par son téléphone, ou créée sans mot de passe. Inviter de nouveau
      * une personne qui n'a pas encore accepté lui envoie un nouveau lien et rend l'ancien inutilisable.
      */
-    public function invite(string $phone, string $name, ?string $email, Role $role, ?Cga $cga, User $inviter): Invitation
+    public function invite(string $phone, string $name, ?string $email, Role $role, ?Cga $cga, User $inviter, ?Adherent $adherent = null): Invitation
     {
-        return DB::transaction(function () use ($phone, $name, $email, $role, $cga, $inviter): Invitation {
+        return DB::transaction(function () use ($phone, $name, $email, $role, $cga, $inviter, $adherent): Invitation {
             $user = User::firstWhere('phone', $phone);
 
             if ($user?->isDisabled()) {
@@ -47,6 +48,7 @@ class Invitations
                 ->where('user_id', $user->id)
                 ->where('role', $role)
                 ->where('cga_id', $cga?->id)
+                ->where('adherent_id', $adherent?->id)
                 ->first();
 
             if ($membership?->isActive()) {
@@ -57,6 +59,7 @@ class Invitations
             $membership->forceFill([
                 'user_id' => $user->id,
                 'cga_id' => $cga?->id,
+                'adherent_id' => $adherent?->id,
                 'role' => $role,
                 'status' => MembershipStatus::Invited,
             ])->save();
@@ -72,7 +75,7 @@ class Invitations
             $invitation->save();
 
             ActivityLog::record('invitation_sent', $membership, ['role' => $role->value], $inviter);
-            $user->notify(new InvitationNotification($invitation->setRelation('membership', $membership->load('cga')), $token));
+            $user->notify(new InvitationNotification($invitation->setRelation('membership', $membership->load('cga', 'adherent')), $token));
 
             return $invitation;
         });

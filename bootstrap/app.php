@@ -3,10 +3,12 @@
 use App\Exceptions\ApiExceptionRenderer;
 use App\Http\Middleware\EnsureActiveSpace;
 use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\RejectMalformedJson;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
+        $middleware->api(prepend: RejectMalformedJson::class);
+
+        // L'espace actif doit être fixé avant que Laravel charge les modèles de l'URL ({adherent}…) :
+        // sinon le cloisonnement par CGA ne s'appliquerait pas à ce chargement.
+        $middleware->prependToPriorityList(before: SubstituteBindings::class, prepend: EnsureActiveSpace::class);
 
         $middleware->alias([
             'espace.actif' => EnsureActiveSpace::class,

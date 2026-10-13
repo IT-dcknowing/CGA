@@ -2,11 +2,17 @@
 
 namespace Database\Seeders;
 
+use App\Enums\LegalForm;
 use App\Enums\Role;
+use App\Enums\TurnoverBasis;
+use App\Models\Adherent;
 use App\Models\Cga;
 use App\Models\Membership;
+use App\Models\Regime;
+use App\Models\Sector;
 use App\Models\TaxRegion;
 use App\Models\User;
+use App\Support\Adherents;
 use Illuminate\Database\Seeder;
 
 /**
@@ -54,7 +60,9 @@ class DatabaseSeeder extends Seeder
         $cgaSuspended->suspend('Démonstration : cotisation impayée depuis 90 jours');
 
         $this->account('0700000001', 'Présidente CNCGA', Role::Presidente);
-        $this->account('0700000002', 'Gérant Démo Abidjan', Role::Gerant, $cgaAbidjan);
+        $gerant = $this->account('0700000002', 'Gérant Démo Abidjan', Role::Gerant, $cgaAbidjan);
+
+        [$bakery] = $this->demoAdherents($cgaAbidjan, $cgaBouake, $gerant, $centerPlateau->id);
 
         $expert = $this->account('0700000003', 'Expert-comptable deux CGA', Role::ExpertComptable, $cgaAbidjan, primary: true);
         Membership::factory()->for($expert)->for($cgaBouake)->role(Role::ExpertComptable)->create();
@@ -62,14 +70,14 @@ class DatabaseSeeder extends Seeder
         $this->account('0700000004', 'Agent CNCGA', Role::AgentCncga);
         $this->account('0700000005', 'Membre du bureau CNCGA', Role::MembreBureau);
         $this->account('0700000006', 'Comptable Démo Abidjan', Role::Comptable, $cgaAbidjan);
-        $this->account('0700000007', 'Adhérent Démo Abidjan', Role::Adherent, $cgaAbidjan);
+        $this->account('0700000007', 'Adhérent Démo Abidjan', Role::Adherent, $cgaAbidjan, adherent: $bakery);
         $this->account('0700000008', 'Gérant Démo Suspendu', Role::Gerant, $cgaSuspended);
 
         User::factory()->disabled()->create(['name' => 'Compte désactivé', 'phone' => '0700000009']);
         User::factory()->withoutPassword()->create(['name' => 'Invité sans mot de passe', 'phone' => '0700000010']);
     }
 
-    private function account(string $phone, string $name, Role $role, ?Cga $cga = null, bool $primary = false): User
+    private function account(string $phone, string $name, Role $role, ?Cga $cga = null, bool $primary = false, ?Adherent $adherent = null): User
     {
         $user = User::factory()->create(['name' => $name, 'phone' => $phone]);
 
@@ -78,8 +86,72 @@ class DatabaseSeeder extends Seeder
             ->role($role)
             ->when($cga !== null, fn ($factory) => $factory->for($cga))
             ->when($primary, fn ($factory) => $factory->primary())
-            ->create();
+            ->create($adherent === null ? [] : ['adherent_id' => $adherent->id]);
 
         return $user;
+    }
+
+    /**
+     * Deux dossiers validés et un brouillon dans DEMOA, un brouillon dans DEMOB (en cours d'agrément,
+     * il ne peut pas encore valider de dossier). Données fictives.
+     *
+     * @return list<Adherent>
+     */
+    private function demoAdherents(Cga $cgaAbidjan, Cga $cgaBouake, User $gerant, int $taxCenterId): array
+    {
+        $adherents = app(Adherents::class);
+        $regimes = Regime::pluck('id', 'code');
+        $sectors = Sector::pluck('id', 'code');
+
+        $bakery = $adherents->createDraft([
+            'legal_form' => LegalForm::Sarl,
+            'company_name' => 'Boulangerie Le Bon Pain',
+            'ncc' => '0000001 A',
+            'regime_id' => $regimes['RME'],
+            'sector_id' => $sectors['COM001'],
+            'activity' => 'Boulangerie-pâtisserie',
+            'tax_center_id' => $taxCenterId,
+            'address' => 'Treichville, Abidjan',
+            'commune' => 'Treichville',
+            'phone' => '0101010101',
+            'signatory_name' => 'Adhérent Démo Abidjan',
+            'signatory_title' => 'Gérant',
+            'turnover' => 18_000_000,
+            'turnover_basis' => TurnoverBasis::PreviousYear,
+            'employees' => 4,
+            'joined_at' => '2026-02-10',
+        ], $cgaAbidjan, $gerant);
+        $adherents->validate($bakery, $gerant);
+
+        $individual = $adherents->createDraft([
+            'legal_form' => LegalForm::EntrepriseIndividuelle,
+            'company_name' => 'Kouamé Services',
+            'ncc' => '0000002 B',
+            'regime_id' => $regimes['TEE'],
+            'sector_id' => $sectors['SER001'],
+            'activity' => 'Maintenance informatique',
+            'tax_center_id' => $taxCenterId,
+            'address' => 'Adjamé, Abidjan',
+            'phone' => '0202020202',
+            'signatory_name' => 'Kouamé Démo',
+            'turnover' => 6_000_000,
+            'turnover_basis' => TurnoverBasis::Forecast,
+            'owner_last_name' => 'Kouamé',
+            'owner_first_names' => 'Démo',
+            'owner_nationality' => 'Ivoirienne',
+            'owner_id_document' => 'CNI C0000000000',
+            'joined_at' => '2026-03-01',
+        ], $cgaAbidjan, $gerant);
+        $adherents->validate($individual, $gerant);
+
+        $draft = $adherents->createDraft([
+            'legal_form' => LegalForm::Sarl,
+            'company_name' => 'Atelier Couture Awa',
+            'phone' => '0303030303',
+        ], $cgaAbidjan, $gerant);
+
+        $adherents->createDraft(['company_name' => 'Maquis Démo Bouaké', 'ncc' => '0000003 C'], $cgaBouake, $gerant);
+
+        return [$bakery, $individual, $draft];
     }
 }

@@ -61,6 +61,9 @@ class InvitationNotification extends Notification
 
     private function roleLabel(): string
     {
-        return lcfirst($this->invitation->membership->role->label());
+        $label = lcfirst($this->invitation->membership->role->label());
+        $company = $this->invitation->membership->adherent?->company_name;
+
+        return $company === null ? $label : "{$label} pour {$company}";
     }
 }

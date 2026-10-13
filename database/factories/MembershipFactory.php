@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\MembershipStatus;
 use App\Enums\Role;
+use App\Models\Adherent;
 use App\Models\Cga;
 use App\Models\Membership;
 use App\Models\User;
@@ -32,7 +33,8 @@ class MembershipFactory extends Factory
     }
 
     /**
-     * Change le rôle ; un rôle CNCGA retire le rattachement au CGA.
+     * Change le rôle ; un rôle CNCGA retire le rattachement au CGA, un rôle adhérent
+     * crée le dossier adhérent dans le CGA de l'accès.
      */
     public function role(Role $role): static
     {
@@ -40,6 +42,9 @@ class MembershipFactory extends Factory
             'role' => $role,
             'space' => $role->space(),
             ...($role->space()->requiresCga() ? [] : ['cga_id' => null]),
+            ...($role === Role::Adherent
+                ? ['adherent_id' => fn (array $attributes) => Adherent::factory()->active()->create(['cga_id' => $attributes['cga_id']])->id]
+                : []),
         ]);
     }
 

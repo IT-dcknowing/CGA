@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\Adherent\DossierController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\Cga\AdherentController;
+use App\Http\Controllers\Api\Cga\AdherentLifecycleController;
 use App\Http\Controllers\Api\Cga\BrandingController;
 use App\Http\Controllers\Api\Cga\ProfileController;
 use App\Http\Controllers\Api\Cncga\CgaController;
@@ -55,9 +58,9 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
                 ->middleware('role:presidente,gerant')
                 ->name('settings.update');
 
-            // Étape 1 : invitations (Q11, Q12).
+            // Étape 1 : invitations (Q11, Q12) ; les agents d'un CGA invitent aussi les adhérents.
             Route::post('invitations', [InvitationController::class, 'store'])
-                ->middleware('role:presidente,agent_cncga,gerant')
+                ->middleware('role:presidente,agent_cncga,gerant,expert_comptable,comptable,secretaire')
                 ->name('invitations.store');
         });
 
@@ -87,5 +90,35 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
                 ->middleware('role:gerant')
                 ->name('profile.branding.store');
         });
+
+        // Étape 4 : dossiers des adhérents du CGA (Q21 à Q37, droits de Q10).
+        Route::middleware('espace.actif:cga')->prefix('adherents')->name('adherents.')->group(function (): void {
+            Route::get('', [AdherentController::class, 'index'])->name('index');
+            Route::post('', [AdherentController::class, 'store'])
+                ->middleware('role:gerant,expert_comptable,comptable,secretaire')
+                ->name('store');
+            Route::get('{adherent}', [AdherentController::class, 'show'])->name('show');
+            Route::patch('{adherent}', [AdherentController::class, 'update'])
+                ->middleware('role:gerant,expert_comptable,comptable')
+                ->name('update');
+            Route::get('{adherent}/history', [AdherentController::class, 'history'])->name('history');
+
+            Route::middleware('role:gerant,expert_comptable,comptable')->group(function (): void {
+                Route::post('{adherent}/validate', [AdherentLifecycleController::class, 'validateDossier'])->name('validate');
+                Route::post('{adherent}/regime', [AdherentLifecycleController::class, 'changeRegime'])->name('regime');
+            });
+            Route::post('{adherent}/strike-off', [AdherentLifecycleController::class, 'strikeOff'])
+                ->middleware('role:gerant,expert_comptable')
+                ->name('strike-off');
+            Route::post('{adherent}/strike-off/cancel', [AdherentLifecycleController::class, 'cancelStrikeOff'])
+                ->middleware('role:gerant')
+                ->name('strike-off.cancel');
+            Route::get('{adherent}/strike-off/document', [AdherentLifecycleController::class, 'strikeOffDocument'])->name('strike-off.document');
+        });
+
+        // Étape 4 : espace adhérent, consultation de son dossier.
+        Route::get('adherent/dossier', [DossierController::class, 'show'])
+            ->middleware('espace.actif:adherent')
+            ->name('adherent.dossier');
     });
 });
