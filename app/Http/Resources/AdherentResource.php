@@ -55,6 +55,15 @@ class AdherentResource extends JsonResource
                 'nationality' => $this->owner_nationality,
                 'id_document' => $this->owner_id_document,
             ] : null,
+            // Profil déclencheur des obligations (Q45).
+            'legal_profile' => [
+                'cmu_dependents' => $this->cmu_dependents,
+                'sells_to_consumers' => $this->sells_to_consumers,
+                'uses_measuring_instruments' => $this->uses_measuring_instruments,
+                'has_expatriates' => $this->has_expatriates,
+                'has_interns' => $this->has_interns,
+                'has_sme_status' => $this->has_sme_status,
+            ],
             'membership_fee' => $this->membership_fee,
             'joined_at' => $this->joined_at?->toDateString(),
             'validated_at' => $this->validated_at,

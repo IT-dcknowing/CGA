@@ -48,6 +48,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'owner_id_document',
     'membership_fee',
     'joined_at',
+    'cmu_dependents',
+    'sells_to_consumers',
+    'uses_measuring_instruments',
+    'has_expatriates',
+    'has_interns',
+    'has_sme_status',
 ])]
 class Adherent extends Model
 {
@@ -88,6 +94,12 @@ class Adherent extends Model
      */
     protected $attributes = [
         'status' => 'draft',
+        'cmu_dependents' => 0,
+        'sells_to_consumers' => false,
+        'uses_measuring_instruments' => false,
+        'has_expatriates' => false,
+        'has_interns' => false,
+        'has_sme_status' => false,
     ];
 
     /**
@@ -105,6 +117,12 @@ class Adherent extends Model
             'member_seq' => 'integer',
             'joined_at' => 'date',
             'validated_at' => 'datetime',
+            'cmu_dependents' => 'integer',
+            'sells_to_consumers' => 'boolean',
+            'uses_measuring_instruments' => 'boolean',
+            'has_expatriates' => 'boolean',
+            'has_interns' => 'boolean',
+            'has_sme_status' => 'boolean',
         ];
     }
 
@@ -204,6 +222,16 @@ class Adherent extends Model
     public function activeStrikeOff(): HasOne
     {
         return $this->hasOne(StrikeOff::class)->ofMany(['id' => 'max'], fn ($query) => $query->whereNull('cancelled_at'));
+    }
+
+    /**
+     * Obligations attribuées à l'adhérent (Q45).
+     *
+     * @return HasMany<AdherentObligation, $this>
+     */
+    public function adherentObligations(): HasMany
+    {
+        return $this->hasMany(AdherentObligation::class);
     }
 
     /**

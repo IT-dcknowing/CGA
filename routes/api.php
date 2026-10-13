@@ -1,10 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\Adherent\DossierController;
+use App\Http\Controllers\Api\Adherent\ObligationController as AdherentSpaceObligationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Cga\AdherentController;
 use App\Http\Controllers\Api\Cga\AdherentLifecycleController;
+use App\Http\Controllers\Api\Cga\AdherentObligationController;
 use App\Http\Controllers\Api\Cga\BrandingController;
+use App\Http\Controllers\Api\Cga\DeadlineController;
 use App\Http\Controllers\Api\Cga\ProfileController;
 use App\Http\Controllers\Api\Cncga\CgaController;
 use App\Http\Controllers\Api\InvitationController;
@@ -114,11 +117,37 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
                 ->middleware('role:gerant')
                 ->name('strike-off.cancel');
             Route::get('{adherent}/strike-off/document', [AdherentLifecycleController::class, 'strikeOffDocument'])->name('strike-off.document');
+
+            // Étape 5 : obligations (Q45) et échéances (Q46 à Q48) d'un adhérent.
+            Route::get('{adherent}/obligations', [AdherentObligationController::class, 'index'])->name('obligations.index');
+            Route::get('{adherent}/deadlines', [DeadlineController::class, 'forAdherent'])->name('deadlines.index');
+
+            Route::middleware('role:gerant,expert_comptable,comptable')->group(function (): void {
+                Route::post('{adherent}/obligations/propose', [AdherentObligationController::class, 'propose'])->name('obligations.propose');
+                Route::post('{adherent}/obligations/confirm-proposals', [AdherentObligationController::class, 'confirmProposals'])->name('obligations.confirm-proposals');
+                Route::post('{adherent}/obligations', [AdherentObligationController::class, 'store'])->name('obligations.store');
+                Route::patch('{adherent}/obligations/{adherentObligation}', [AdherentObligationController::class, 'update'])
+                    ->scopeBindings()
+                    ->name('obligations.update');
+                Route::put('{adherent}/deadlines/{obligation}/{dueDate}', [DeadlineController::class, 'update'])
+                    ->where('dueDate', '\d{4}-\d{2}-\d{2}')
+                    ->name('deadlines.update');
+            });
         });
 
+        // Étape 5 : échéances de tout le portefeuille du CGA.
+        Route::get('deadlines', [DeadlineController::class, 'forCga'])
+            ->middleware('espace.actif:cga')
+            ->name('deadlines.index');
+
         // Étape 4 : espace adhérent, consultation de son dossier.
-        Route::get('adherent/dossier', [DossierController::class, 'show'])
-            ->middleware('espace.actif:adherent')
-            ->name('adherent.dossier');
+        Route::middleware('espace.actif:adherent')->prefix('adherent')->name('adherent.')->group(function (): void {
+            Route::get('dossier', [DossierController::class, 'show'])->name('dossier');
+            Route::get('obligations', [AdherentSpaceObligationController::class, 'obligations'])->name('obligations');
+            Route::get('deadlines', [AdherentSpaceObligationController::class, 'deadlines'])->name('deadlines');
+            Route::put('deadlines/{obligation}/{dueDate}', [AdherentSpaceObligationController::class, 'report'])
+                ->where('dueDate', '\d{4}-\d{2}-\d{2}')
+                ->name('deadlines.report');
+        });
     });
 });

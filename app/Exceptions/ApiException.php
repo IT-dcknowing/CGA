@@ -122,6 +122,21 @@ class ApiException extends Exception implements ShouldntReport
         return new self('cga_abbreviation_missing', "Renseignez l'abréviation du CGA dans sa fiche avant de valider un dossier.", 409);
     }
 
+    public static function obligationAlreadyAssigned(): self
+    {
+        return new self('obligation_already_assigned', "Cette obligation est déjà confirmée pour l'adhérent.", 409);
+    }
+
+    public static function deadlineNotFound(): self
+    {
+        return new self('deadline_not_found', "Cette échéance n'existe pas pour cet adhérent.", 404);
+    }
+
+    public static function deadlineAlreadySettled(): self
+    {
+        return new self('deadline_already_settled', 'Cette échéance est déjà réglée.', 409);
+    }
+
     public static function settingNotEditable(): self
     {
         return new self('setting_not_editable', 'Ce paramètre est fixé par le CNCGA pour tout le réseau.', 403);

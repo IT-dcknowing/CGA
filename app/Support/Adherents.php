@@ -24,7 +24,7 @@ use Illuminate\Validation\ValidationException;
  */
 class Adherents
 {
-    public function __construct(private Settings $settings) {}
+    public function __construct(private Settings $settings, private AdherentObligations $obligations) {}
 
     /**
      * Le droit d'adhésion par défaut vient des paramètres du CGA, modifiable par dossier (Q40).
@@ -39,6 +39,9 @@ class Adherents
             'created_by' => $author->id,
             'membership_fee' => $adherent->membership_fee ?? $this->settings->get(SettingKey::MembershipFee, $cga->id),
         ])->save();
+
+        // Obligations pré-cochées selon le profil dès l'inscription (Q45).
+        $this->obligations->propose($adherent);
 
         return $adherent;
     }
@@ -76,6 +79,7 @@ class Adherents
 
             $this->recordRegime($adherent, $adherent->regime_id, $adherent->joined_at, "Régime à l'adhésion", $validator);
             ActivityLog::record('validated', $adherent, ['member_no' => $adherent->member_no], $validator);
+            $this->obligations->propose($adherent);
 
             return $adherent;
         });
@@ -114,7 +118,10 @@ class Adherents
                 'reason' => $reason,
             ], $by);
 
-            return $adherent->unsetRelation('latestRegimeChange')->setRelation('regime', $regime);
+            $adherent->unsetRelation('latestRegimeChange')->setRelation('regime', $regime);
+            $this->obligations->propose($adherent);
+
+            return $adherent;
         });
     }
 

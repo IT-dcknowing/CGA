@@ -2,9 +2,91 @@
     "info": {
         "_postman_id": "6a0f3c9e-2b1d-4c7a-9f51-0c4e8d2b7a13",
         "name": "CGA Connect API",
-        "description": "Requêtes et jeux de données de chaque route de l'API CGA Connect (`/api/v1`), avec des tests automatiques sur chaque réponse.\n\n**Avant de lancer**\n1. `php artisan migrate:fresh --seed` : recrée la base locale avec les comptes et données de démo.\n2. `php artisan serve` : l'API écoute sur `http://127.0.0.1:8000`.\n3. Importez cette collection et l'environnement `CGA Connect — local`, puis sélectionnez l'environnement.\n\n**Ordre** : lancez toujours d'abord le dossier « 0. Démarrage » : il connecte les comptes de démo et range leurs jetons et les identifiants des référentiels dans les variables de collection. Ensuite, chaque dossier fonctionne seul ; à l'intérieur d'un dossier, lancez les requêtes dans l'ordre, car certaines réutilisent ce que les précédentes ont créé. Pour tout exécuter, utilisez le Collection Runner ou la ligne de commande :\n`npx --yes newman@6.2.1 run postman/CGA-Connect.postman_collection.json -e postman/CGA-Connect-local.postman_environment.json --working-dir .`\n\n**Comptes de démo** (mot de passe `password`) : 0700000001 Présidente · 0700000002 gérant DEMOA · 0700000003 expert-comptable DEMOA et DEMOB · 0700000004 agent CNCGA · 0700000005 membre du bureau · 0700000006 comptable DEMOA · 0700000007 adhérent DEMOA · 0700000008 gérant du CGA suspendu DEMOS · 0700000009 compte désactivé · 0700000010 invité sans mot de passe.\n\n**SMS en local** : aucun SMS ne part (`SMS_DRIVER=log`) ; chaque message est écrit dans `storage/logs/sms.log` et recopié dans `dev_sms` de la réponse, ce qui permet aux requêtes de récupérer le lien d'invitation et le code de réinitialisation.\n\n**Limites** : 5 connexions par minute pour un même numéro, 10 activations d'invitation par minute. Attendez une minute entre deux exécutions complètes.\n\n**Mise à jour** : chaque nouvelle route doit être ajoutée ici avec son cas nominal et ses cas d'erreur. Le test `tests/Feature/Routing/PostmanCollectionTest.php` échoue sinon.",
+        "description": "Requêtes et jeux de données de chaque route de l'API CGA Connect (`/api/v1`), avec des tests automatiques sur chaque réponse.\n\n**Avant de lancer**\n1. `php artisan migrate:fresh --seed` : recrée la base locale avec les comptes et données de démo.\n2. `php artisan serve` : l'API écoute sur `http://127.0.0.1:8000`.\n3. Importez cette collection et l'environnement `CGA Connect — local`, puis sélectionnez l'environnement.\n\n**Jetons** : avant chaque requête, un script de la collection connecte les comptes de démo et charge les identifiants des référentiels s'ils manquent ; un simple Send fonctionne donc sur n'importe quelle requête. Si la base a été réinitialisée, le premier envoi répond 401 et efface le jeton périmé : renvoyez la requête. Le dossier « 0. Démarrage » fait la même préparation explicitement.\n\n**Ordre** : chaque dossier fonctionne seul ; à l'intérieur d'un dossier, lancez les requêtes dans l'ordre, car certaines réutilisent ce que les précédentes ont créé. Avec le Collection Runner, cochez « Keep variable values » pour garder les jetons après l'exécution. Pour tout exécuter en ligne de commande :\n`npx --yes newman@6.2.1 run postman/CGA-Connect.postman_collection.json -e postman/CGA-Connect-local.postman_environment.json --working-dir .`\n\n**Comptes de démo** (mot de passe `password`) : 0700000001 Présidente · 0700000002 gérant DEMOA · 0700000003 expert-comptable DEMOA et DEMOB · 0700000004 agent CNCGA · 0700000005 membre du bureau · 0700000006 comptable DEMOA · 0700000007 adhérent DEMOA · 0700000008 gérant du CGA suspendu DEMOS · 0700000009 compte désactivé · 0700000010 invité sans mot de passe.\n\n**SMS en local** : aucun SMS ne part (`SMS_DRIVER=log`) ; chaque message est écrit dans `storage/logs/sms.log` et recopié dans `dev_sms` de la réponse, ce qui permet aux requêtes de récupérer le lien d'invitation et le code de réinitialisation.\n\n**Limites** : 5 connexions par minute pour un même numéro, 10 activations d'invitation par minute. Attendez une minute entre deux exécutions complètes.\n\n**Mise à jour** : chaque nouvelle route doit être ajoutée ici avec son cas nominal et ses cas d'erreur. Le test `tests/Feature/Routing/PostmanCollectionTest.php` échoue sinon.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Préparation automatique : si les jetons des comptes de démo ou les identifiants des référentiels",
+                    "// manquent (dossier « 0. Démarrage » non lancé, ou lancé sans « Keep variable values »), ils sont chargés ici.",
+                    "(function () {",
+                    "    if (pm.request.auth && pm.request.auth.type === \"noauth\") { return; }",
+                    "    const ACCOUNTS = { token_presidente: \"0700000001\", token_agent: \"0700000004\", token_bureau: \"0700000005\", token_gerant: \"0700000002\", token_expert: \"0700000003\", token_comptable: \"0700000006\", token_adherent: \"0700000007\", token_gerant_suspendu: \"0700000008\" };",
+                    "    const baseUrl = pm.variables.replaceIn(\"{{base_url}}\");",
+                    "    const missing = Object.keys(ACCOUNTS).filter(v => !pm.collectionVariables.get(v));",
+                    "    const needsReferentials = [\"regime_rme_id\", \"sector_commerce_id\", \"tax_center_id\", \"reason_reclassement_id\", \"obligation_tva_id\"].some(v => !pm.collectionVariables.get(v));",
+                    "    if (missing.length === 0 && !needsReferentials) { return; }",
+                    "    const call = (method, path, token, body, done) => pm.sendRequest({",
+                    "        url: baseUrl + path,",
+                    "        method: method,",
+                    "        header: Object.assign({ Accept: \"application/json\", \"Content-Type\": \"application/json\" }, token ? { Authorization: \"Bearer \" + token } : {}),",
+                    "        body: body ? { mode: \"raw\", raw: JSON.stringify(body) } : undefined",
+                    "    }, (error, response) => done(error || response.code >= 400 ? null : response.json()));",
+                    "    const loadReferentials = () => {",
+                    "        if (!needsReferentials) { return; }",
+                    "        const token = pm.collectionVariables.get(\"token_gerant\");",
+                    "        call(\"GET\", \"/ref/regimes\", token, null, r => r && r.data.forEach(x => pm.collectionVariables.set(\"regime_\" + x.code.toLowerCase() + \"_id\", x.id)));",
+                    "        call(\"GET\", \"/ref/sectors\", token, null, r => r && pm.collectionVariables.set(\"sector_commerce_id\", r.data.find(s => s.code === \"COM001\").id));",
+                    "        call(\"GET\", \"/ref/tax-centers\", token, null, r => {",
+                    "            if (!r) { return; }",
+                    "            const dr1 = r.data.find(x => x.code === \"DEMO-DR1\");",
+                    "            pm.collectionVariables.set(\"tax_region_id\", dr1.id);",
+                    "            pm.collectionVariables.set(\"tax_center_id\", dr1.centers.find(c => c.code === \"DEMO-CDI1\").id);",
+                    "            pm.collectionVariables.set(\"tax_center_autre_region\", r.data.find(x => x.code === \"DEMO-DR2\").centers[0].id);",
+                    "        });",
+                    "        call(\"GET\", \"/ref/strike-off-reasons\", token, null, r => {",
+                    "            if (!r) { return; }",
+                    "            pm.collectionVariables.set(\"reason_reclassement_id\", r.data.find(x => x.code === \"reclassement_regime_reel\").id);",
+                    "            pm.collectionVariables.set(\"reason_manquements_id\", r.data.find(x => x.code === \"manquements_graves\").id);",
+                    "        });",
+                    "        call(\"GET\", \"/ref/obligations\", token, null, r => r && pm.collectionVariables.set(\"obligation_tva_id\", r.data.find(o => o.code === \"tva\").id));",
+                    "    };",
+                    "    let pending = missing.length;",
+                    "    if (pending === 0) { loadReferentials(); return; }",
+                    "    missing.forEach(variable => call(\"POST\", \"/auth/login\", null, { phone: ACCOUNTS[variable], password: \"password\", device_name: \"Postman\" }, r => {",
+                    "        if (r) {",
+                    "            pm.collectionVariables.set(variable, r.data.token);",
+                    "            if (variable === \"token_gerant\") { pm.collectionVariables.set(\"membership_gerant\", r.data.active_membership_id); }",
+                    "            if (variable === \"token_expert\") {",
+                    "                const demob = r.data.memberships.find(m => m.cga && m.cga.abbreviation === \"DEMOB\");",
+                    "                pm.collectionVariables.set(\"membership_expert_demoa\", r.data.active_membership_id);",
+                    "                if (demob) { pm.collectionVariables.set(\"membership_expert_demob\", demob.id); pm.collectionVariables.set(\"cga_demob_id\", demob.cga.id); }",
+                    "            }",
+                    "        }",
+                    "        pending -= 1;",
+                    "        if (pending === 0) { loadReferentials(); }",
+                    "    }));",
+                    "})();"
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "// Jeton d'un compte de démo refusé (base réinitialisée par « php artisan migrate:fresh --seed ») :",
+                    "// les jetons et identifiants de démo sont effacés, puis rechargés automatiquement au prochain envoi.",
+                    "(function () {",
+                    "    if (pm.response.code !== 401 || !pm.request.auth || pm.request.auth.type !== \"bearer\") { return; }",
+                    "    const ACCOUNTS = { token_presidente: \"0700000001\", token_agent: \"0700000004\", token_bureau: \"0700000005\", token_gerant: \"0700000002\", token_expert: \"0700000003\", token_comptable: \"0700000006\", token_adherent: \"0700000007\", token_gerant_suspendu: \"0700000008\" };",
+                    "    let used = \"\";",
+                    "    try { used = String(pm.request.auth.parameters().get(\"token\") || \"\"); } catch (e) { return; }",
+                    "    const resolved = pm.variables.replaceIn(used);",
+                    "    const isAccountToken = Object.keys(ACCOUNTS).some(v => used === \"{{\" + v + \"}}\" || (pm.collectionVariables.get(v) && pm.collectionVariables.get(v) === resolved));",
+                    "    if (!isAccountToken) { return; }",
+                    "    Object.keys(ACCOUNTS).concat([\"membership_gerant\", \"membership_expert_demoa\", \"membership_expert_demob\", \"cga_demob_id\", \"regime_rme_id\", \"regime_tee_id\", \"regime_rsi_id\", \"sector_commerce_id\", \"tax_region_id\", \"tax_center_id\", \"tax_center_autre_region\", \"reason_reclassement_id\", \"reason_manquements_id\", \"obligation_tva_id\"])",
+                    "        .forEach(v => pm.collectionVariables.set(v, \"\"));",
+                    "    console.warn(\"Jeton refusé : la base a sans doute été réinitialisée. Les jetons et identifiants de démo sont effacés ; renvoyez la requête, ils seront rechargés.\");",
+                    "})();"
+                ]
+            }
+        }
+    ],
     "item": [
         {
             "name": "0. Démarrage — comptes de démo et référentiels",
@@ -669,6 +751,52 @@
                             ]
                         },
                         "description": "Range les identifiants des motifs utilisés par les radiations (`reason_reclassement_id`, `reason_manquements_id`).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Préparation — obligations Legal Flow",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.collectionVariables.set(\"obligation_tva_id\", pm.response.json().data.find(o => o.code === \"tva\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/ref/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "ref",
+                                "obligations"
+                            ]
+                        },
+                        "description": "Range l'identifiant de l'obligation TVA (`obligation_tva_id`), utilisée par le dossier de l'étape 5.",
                         "auth": {
                             "type": "bearer",
                             "bearer": [
@@ -8456,6 +8584,2664 @@
                     "response": []
                 }
             ]
+        },
+        {
+            "name": "7. Étape 5 — Obligations et échéances",
+            "description": "Obligations proposées par le moteur Legal Flow selon le profil du dossier, confirmées, écartées ou ajoutées par le CGA (Q45) ; échéancier d'un dossier et du portefeuille, déclarations et paiements saisis par le CGA, signalements de l'adhérent à confirmer (Q46 à Q48).",
+            "item": [
+                {
+                    "name": "Préparation — retrouver la boulangerie de démo",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.collectionVariables.set(\"bakery_id\", pm.response.json().data.find(a => a.company_name === \"Boulangerie Le Bon Pain\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents?search=boulangerie",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ],
+                            "query": [
+                                {
+                                    "key": "search",
+                                    "value": "boulangerie"
+                                }
+                            ]
+                        },
+                        "description": "Range l'identifiant de la boulangerie de démo (`bakery_id`), dont le dirigeant a l'accès adhérent 0700000007 : ses obligations sont confirmées par le jeu de démo.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Préparation — créer un dossier avec son profil légal",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.collectionVariables.set(\"obl_ncc\", Date.now().toString().slice(-7) + \" O\");"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 201\", () => pm.response.to.have.status(201));",
+                                    "const json = pm.response.json();",
+                                    "pm.collectionVariables.set(\"obl_adherent_id\", json.data.id);",
+                                    "pm.test(\"Profil légal enregistré\", () => { pm.expect(json.data.legal_profile.cmu_dependents).to.eql(3); pm.expect(json.data.legal_profile.has_expatriates).to.be.false; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents"
+                            ]
+                        },
+                        "description": "Le profil légal (Q45) complète les champs de l'étape 4 : `cmu_dependents` (ayants droit CMU), `sells_to_consumers`, `uses_measuring_instruments`, `has_expatriates`, `has_interns`, `has_sme_status`. Avec le régime, l'effectif et la commune, il décide des obligations proposées. Le NCC change à chaque exécution.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"company_name\": \"Quincaillerie Postman {{obl_ncc}}\",\n    \"legal_form\": \"sarl\",\n    \"ncc\": \"{{obl_ncc}}\",\n    \"phone\": \"05 06 07 08 10\",\n    \"regime_id\": {{regime_rme_id}},\n    \"sector_id\": {{sector_commerce_id}},\n    \"activity\": \"Quincaillerie\",\n    \"tax_center_id\": {{tax_center_id}},\n    \"address\": \"Marcory, Abidjan\",\n    \"commune\": \"Marcory\",\n    \"signatory_name\": \"Dirigeant Postman\",\n    \"signatory_title\": \"Gérant\",\n    \"turnover\": 20000000,\n    \"turnover_basis\": \"previous_year\",\n    \"employees\": 2,\n    \"cmu_dependents\": 3,\n    \"sells_to_consumers\": false,\n    \"uses_measuring_instruments\": false,\n    \"has_expatriates\": false,\n    \"has_interns\": false,\n    \"has_sme_status\": false,\n    \"joined_at\": \"2026-05-01\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Préparation — valider le dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossier actif\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"active\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/validate",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "validate"
+                            ]
+                        },
+                        "description": "À la validation, le moteur propose les obligations du profil (Q45).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Obligations proposées par le moteur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "const codes = json.data.map(a => a.obligation.code);",
+                                    "pm.test(\"Toutes proposées\", () => { pm.expect(json.meta.proposed).to.eql(json.data.length); pm.expect(json.meta.confirmed).to.eql(0); });",
+                                    "pm.test(\"Obligations du RME avec salariés\", () => [\"micro\", \"its\", \"cnps_cot\", \"cmu_cot\", \"mun_tax\"].forEach(c => pm.expect(codes).to.include(c)));",
+                                    "pm.test(\"Ni TVA (régime réel) ni contrats d'expatriés\", () => { pm.expect(codes).to.not.include(\"tva\"); pm.expect(codes).to.not.include(\"expa\"); });",
+                                    "pm.collectionVariables.set(\"obl_assignment_e302\", pm.response.json().data.find(a => a.obligation.code === \"e302\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations"
+                            ]
+                        },
+                        "description": "Le moteur Legal Flow applique les conditions du référentiel au profil du dossier : régime, forme, effectif, commune, ayants droit, vente aux consommateurs, instruments de mesure, expatriés, stagiaires, statut PME. Il **propose** ; le CGA confirme ou écarte (Q45). Pour chaque obligation : `applicable` (le profil actuel la justifie-t-il ?) et `periodicity` (M mensuelle, T trimestrielle, A annuelle, P ponctuelle, C continue, E événementielle). `meta` compte les obligations proposées, confirmées et écartées.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Écarter — motif manquant",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « reason »\", () => pm.expect(pm.response.json().errors[\"reason\"][0]).to.eql(\"Indiquez pourquoi cette obligation ne concerne pas l'adhérent.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/{{obl_assignment_e302}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "{{obl_assignment_e302}}"
+                            ]
+                        },
+                        "description": "Écarter une obligation proposée demande d'expliquer pourquoi elle ne concerne pas l'adhérent.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"dismissed\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Décider — décision invalide",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « status »\", () => pm.expect(pm.response.json().errors[\"status\"][0]).to.eql(\"La valeur du champ décision est invalide.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/{{obl_assignment_e302}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "{{obl_assignment_e302}}"
+                            ]
+                        },
+                        "description": "Seules deux décisions existent : `confirmed` ou `dismissed`.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"proposed\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Écarter une obligation proposée",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Écartée avec son motif\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"dismissed\"); pm.expect(json.data.status_label).to.eql(\"Écartée\"); pm.expect(json.data.dismissal_reason).to.eql(\"Aucune commission, aucun honoraire ni loyer versé\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/{{obl_assignment_e302}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "{{obl_assignment_e302}}"
+                            ]
+                        },
+                        "description": "L'état 302 ne concerne pas cette entreprise : l'obligation est écartée avec son motif et ne sera plus proposée.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"dismissed\",\n    \"reason\": \"Aucune commission, aucun honoraire ni loyer versé\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Confirmer toutes les propositions",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Plus rien à décider\", () => { const json = pm.response.json(); pm.expect(json.meta.proposed).to.eql(0); pm.expect(json.meta.dismissed).to.eql(1); pm.expect(json.meta.confirmed_now).to.eql(json.meta.confirmed); pm.expect(json.meta.confirmed).to.be.above(10); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/confirm-proposals",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "confirm-proposals"
+                            ]
+                        },
+                        "description": "Confirme d'un coup toutes les obligations encore proposées. `meta.confirmed_now` : nombre confirmé par cette requête. Seules les obligations confirmées produisent des échéances.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Modifier le profil — embauche d'un expatrié",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Profil mis à jour\", () => { const json = pm.response.json(); pm.expect(json.data.legal_profile.has_expatriates).to.be.true; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}"
+                            ]
+                        },
+                        "description": "Quand le profil change (modification, validation, changement de régime), le moteur propose aussitôt les obligations devenues applicables.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"has_expatriates\": true\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Obligations — nouvelle proposition après le changement",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Contrats d'expatriés proposés\", () => { pm.expect(json.meta.proposed).to.eql(1); pm.expect(json.data.find(a => a.obligation.code === \"expa\").status).to.eql(\"proposed\"); });",
+                                    "pm.collectionVariables.set(\"obl_assignment_expa\", pm.response.json().data.find(a => a.obligation.code === \"expa\").id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations"
+                            ]
+                        },
+                        "description": "Le visa des contrats des salariés expatriés est proposé ; les obligations déjà décidées ne bougent pas.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Relancer le moteur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Rien de nouveau, l'écartée reste écartée\", () => { const json = pm.response.json(); pm.expect(json.meta.created).to.eql(0); pm.expect(json.data.find(a => a.obligation.code === \"e302\").status).to.eql(\"dismissed\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/propose",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "propose"
+                            ]
+                        },
+                        "description": "Repasse le profil au moteur, par exemple après l'import d'une nouvelle version du référentiel. `meta.created` : nombre de nouvelles propositions. Une obligation écartée n'est jamais reproposée.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Confirmer une obligation proposée",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Confirmée\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"confirmed\"); pm.expect(json.data.applicable).to.be.true; pm.expect(json.data.periodicity).to.eql(\"P\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/{{obl_assignment_expa}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "{{obl_assignment_expa}}"
+                            ]
+                        },
+                        "description": "Décision une par une : ici, le visa des contrats des expatriés.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"confirmed\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Ajouter une obligation non proposée (TVA)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 201\", () => pm.response.to.have.status(201));",
+                                    "pm.test(\"Ajout manuel confirmé\", () => { const json = pm.response.json(); pm.expect(json.data.obligation.code).to.eql(\"tva\"); pm.expect(json.data.status).to.eql(\"confirmed\"); pm.expect(json.data.source).to.eql(\"manual\"); pm.expect(json.data.applicable).to.be.false; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations"
+                            ]
+                        },
+                        "description": "Le CGA ajuste au cas par cas (Q45) : il ajoute une obligation que le moteur n'a pas proposée. Elle est confirmée d'office, avec `source` = `manual` ; `applicable` vaut `false` car le profil ne la justifie pas.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"obligation_id\": {{obligation_tva_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Ajouter — obligation déjà suivie",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 409\", () => pm.response.to.have.status(409));",
+                                    "pm.test(\"Code d'erreur « obligation_already_assigned »\", () => pm.expect(pm.response.json().code).to.eql(\"obligation_already_assigned\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations"
+                            ]
+                        },
+                        "description": "La TVA est déjà confirmée pour ce dossier.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"obligation_id\": {{obligation_tva_id}}\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Ajouter — obligation inconnue",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « obligation_id »\", () => pm.expect(pm.response.json().errors[\"obligation_id\"][0]).to.eql(\"La valeur du champ obligation est invalide.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations"
+                            ]
+                        },
+                        "description": "L'obligation doit exister dans le référentiel national en vigueur.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"obligation_id\": 999999\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Rétablir une obligation écartée",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Confirmée, motif effacé\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"confirmed\"); pm.expect(json.data.dismissal_reason).to.be.null; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/obligations/{{obl_assignment_e302}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "obligations",
+                                "{{obl_assignment_e302}}"
+                            ]
+                        },
+                        "description": "Une décision se revoit : l'obligation écartée est confirmée, son motif est effacé. Chaque décision est gardée dans le journal d'audit.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"confirmed\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Décider — obligation d'un autre dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 404\", () => pm.response.to.have.status(404));",
+                                    "pm.test(\"Code d'erreur « not_found »\", () => pm.expect(pm.response.json().code).to.eql(\"not_found\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}/obligations/{{obl_assignment_e302}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}",
+                                "obligations",
+                                "{{obl_assignment_e302}}"
+                            ]
+                        },
+                        "description": "L'obligation appartient au nouveau dossier, pas à la boulangerie : 404, rien n'est modifié.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"status\": \"dismissed\",\n    \"reason\": \"Essai\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Confirmer — CGA suspendu",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « cga_suspended »\", () => pm.expect(pm.response.json().code).to.eql(\"cga_suspended\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}/obligations/confirm-proposals",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}",
+                                "obligations",
+                                "confirm-proposals"
+                            ]
+                        },
+                        "description": "Un CGA suspendu ne peut plus que consulter (Q19).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant_suspendu}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Obligations — refusées dans l'espace CNCGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « space_forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"space_forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}",
+                                "obligations"
+                            ]
+                        },
+                        "description": "Le CNCGA ne voit pas les dossiers nominatifs (Q15).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_presidente}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Échéancier du dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Fenêtre de 3 mois\", () => pm.expect(json.meta.months).to.eql(3));",
+                                    "pm.test(\"Triées par date\", () => { const dates = json.data.map(d => d.due_date); pm.expect(dates).to.eql([...dates].sort()); });",
+                                    "pm.test(\"Rien d'enregistré\", () => pm.expect(json.data.every(d => d.status === \"to_do\" && d.adherent_report === null)).to.be.true);",
+                                    "const micro = json.data.find(d => d.obligation.code === \"micro\");",
+                                    "pm.test(\"Impôt des microentreprises au 10 du mois\", () => pm.expect(micro.due_date.slice(8)).to.eql(\"10\"));",
+                                    "pm.collectionVariables.set(\"obl_deadline_obligation_id\", micro.obligation.id);",
+                                    "pm.collectionVariables.set(\"obl_deadline_date\", micro.due_date);",
+                                    "const next = new Date(micro.due_date + \"T00:00:00Z\"); next.setUTCDate(next.getUTCDate() + 1);",
+                                    "pm.collectionVariables.set(\"obl_deadline_wrong_date\", next.toISOString().slice(0, 10));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines"
+                            ]
+                        },
+                        "description": "Échéances datées des obligations confirmées, du début du mois en cours jusqu'à la fin de la fenêtre : 3 mois par défaut (paramètre « deadlines_horizon_months », Q48). Calendrier : mensuelles le jour fixé du mois, trimestrielles en janvier, avril, juillet et octobre, annuelles à leur date (JJ/MM). Les obligations ponctuelles, continues et événementielles n'ont pas d'échéance datée. Chaque ligne : `status` (to_do, declared, partially_paid, paid), `days_left`, `overdue`, montants, et l'éventuel signalement de l'adhérent.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Échéancier — sur 6 mois",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Fenêtre de 6 mois\", () => { const json = pm.response.json(); pm.expect(json.meta.months).to.eql(6); pm.expect(json.data.filter(d => d.obligation.code === \"micro\")).to.have.lengthOf(6); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines?months=6",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines"
+                            ],
+                            "query": [
+                                {
+                                    "key": "months",
+                                    "value": "6"
+                                }
+                            ]
+                        },
+                        "description": "Le paramètre `months` (1 à 12) élargit la fenêtre.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Échéancier — par administration (CNPS)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Uniquement la CNPS\", () => { const json = pm.response.json(); pm.expect(json.data.length).to.be.above(0); pm.expect(json.data.every(d => d.obligation.administration.code === \"cnps\")).to.be.true; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines?administration=cnps",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines"
+                            ],
+                            "query": [
+                                {
+                                    "key": "administration",
+                                    "value": "cnps"
+                                }
+                            ]
+                        },
+                        "description": "Filtre `administration` : dgi, cnps, cmu, it, com, pme, mun.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Échéancier — fenêtre trop longue",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Erreur sur months\", () => { const json = pm.response.json(); pm.expect(json.errors).to.have.property(\"months\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines?months=24",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines"
+                            ],
+                            "query": [
+                                {
+                                    "key": "months",
+                                    "value": "24"
+                                }
+                            ]
+                        },
+                        "description": "Douze mois au plus.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer une déclaration avec paiement partiel",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Partiellement payée\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"partially_paid\"); pm.expect(json.data.status_label).to.eql(\"Partiellement payée\"); pm.expect(json.data.balance).to.eql(30000); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "Le CGA enregistre la déclaration et les montants en FCFA (Q46). L'adresse désigne l'échéance : obligation et date d'échéance. Le statut se déduit : non déclarée → `to_do` ; payée en totalité → `paid` ; payée en partie → `partially_paid` ; déclarée sans paiement → `declared`.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true,\n    \"amount_due\": 50000,\n    \"amount_paid\": 20000\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer le solde",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Payée, solde nul\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"paid\"); pm.expect(json.data.balance).to.eql(0); pm.expect(json.data.overdue).to.be.false; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "Le montant payé atteint le montant dû : échéance réglée.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_expert}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true,\n    \"amount_due\": 50000,\n    \"amount_paid\": 50000\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Corriger — déclaration saisie par erreur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"À faire\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"to_do\"); pm.expect(json.data.amount_due).to.be.null; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "Le CGA corrige à tout moment : l'échéance redevient « à faire », les montants sont effacés.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": false\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer — date qui n'est pas une échéance",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 404\", () => pm.response.to.have.status(404));",
+                                    "pm.test(\"Code d'erreur « deadline_not_found »\", () => pm.expect(pm.response.json().code).to.eql(\"deadline_not_found\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_wrong_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_wrong_date}}"
+                            ]
+                        },
+                        "description": "L'impôt des microentreprises tombe le 10 : le lendemain n'est pas une échéance.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer — obligation non suivie par le dossier",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 404\", () => pm.response.to.have.status(404));",
+                                    "pm.test(\"Code d'erreur « deadline_not_found »\", () => pm.expect(pm.response.json().code).to.eql(\"deadline_not_found\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}/deadlines/{{obligation_tva_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}",
+                                "deadlines",
+                                "{{obligation_tva_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "La TVA n'est pas confirmée pour la boulangerie : elle n'a pas d'échéance.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer — déclaration non précisée",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « declared »\", () => pm.expect(pm.response.json().errors[\"declared\"][0]).to.eql(\"Le champ déclaration faite est obligatoire.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "`declared` (vrai ou faux) est obligatoire.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer — montant négatif",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « amount_due »\", () => pm.expect(pm.response.json().errors[\"amount_due\"][0]).to.eql(\"Le champ montant dû doit être supérieur ou égal à 0.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "Les montants sont des entiers positifs ou nuls, en FCFA.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true,\n    \"amount_due\": -5000\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enregistrer — refusé dans l'espace adhérent",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « space_forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"space_forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{obl_adherent_id}}/deadlines/{{obl_deadline_obligation_id}}/{{obl_deadline_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{obl_adherent_id}}",
+                                "deadlines",
+                                "{{obl_deadline_obligation_id}}",
+                                "{{obl_deadline_date}}"
+                            ]
+                        },
+                        "description": "L'adhérent signale par sa propre route ; seul le CGA enregistre.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Mes obligations (espace adhérent)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Obligations confirmées de la boulangerie\", () => { const json = pm.response.json(); pm.expect(json.data.length).to.be.above(10); pm.expect(json.data.every(a => a.status === \"confirmed\")).to.be.true; pm.expect(json.data.map(a => a.obligation.code)).to.include(\"metro\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/obligations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "obligations"
+                            ]
+                        },
+                        "description": "L'adhérent voit les obligations que son CGA a confirmées pour son entreprise, jamais les propositions ni les obligations écartées.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Mon échéancier (espace adhérent)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Échéances de la boulangerie\", () => { pm.expect(json.meta.months).to.eql(3); pm.expect(json.data.every(d => d.adherent.company_name === \"Boulangerie Le Bon Pain\")).to.be.true; });",
+                                    "const open = json.data.find(d => d.status !== \"paid\");",
+                                    "pm.collectionVariables.set(\"report_obligation_id\", open.obligation.id);",
+                                    "pm.collectionVariables.set(\"report_due_date\", open.due_date);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines"
+                            ]
+                        },
+                        "description": "Mêmes échéances que celles vues par le CGA pour l'entreprise, avec le même paramètre `months`.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Signaler une déclaration",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Signalement à confirmer\", () => { const json = pm.response.json(); pm.expect(json.data.adherent_report.type).to.eql(\"declared\"); pm.expect(json.data.adherent_report.label).to.eql(\"Déclarée selon l'adhérent — à confirmer\"); pm.expect(json.data.status).to.not.eql(\"paid\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "L'adhérent signale qu'il a déclaré : la situation reste « à confirmer » par le CGA, le statut de l'échéance ne change pas (Q47).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"report\": \"declared\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Signaler un paiement — montant manquant",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « amount »\", () => pm.expect(pm.response.json().errors[\"amount\"][0]).to.eql(\"Indiquez le montant payé.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "Un paiement se signale avec son montant.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"report\": \"paid\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Signaler — type inconnu",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « report »\", () => pm.expect(pm.response.json().errors[\"report\"][0]).to.eql(\"La valeur du champ signalement est invalide.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "`report` : `declared` ou `paid`.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"report\": \"oublie\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Signaler un paiement",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Paiement signalé\", () => { const json = pm.response.json(); pm.expect(json.data.adherent_report.type).to.eql(\"paid\"); pm.expect(json.data.adherent_report.amount).to.eql(25000); pm.expect(json.data.adherent_report.label).to.eql(\"Payée selon l'adhérent — à confirmer\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "Le nouveau signalement remplace le précédent, toujours « à confirmer ».",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"report\": \"paid\",\n    \"amount\": 25000\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Signaler — obligation non suivie",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 404\", () => pm.response.to.have.status(404));",
+                                    "pm.test(\"Code d'erreur « deadline_not_found »\", () => pm.expect(pm.response.json().code).to.eql(\"deadline_not_found\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines/{{obligation_tva_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines",
+                                "{{obligation_tva_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "La boulangerie n'est pas soumise à la TVA : pas d'échéance.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"report\": \"declared\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Portefeuille — signalements à confirmer",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"Uniquement des signalements\", () => pm.expect(json.data.every(d => d.adherent_report !== null)).to.be.true);",
+                                    "pm.test(\"Le paiement de la boulangerie y figure\", () => pm.expect(json.data.map(d => d.key)).to.include(pm.collectionVariables.get(\"report_obligation_id\") + \"|\" + pm.collectionVariables.get(\"report_due_date\")));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/deadlines?status=pending_confirmation",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "deadlines"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "pending_confirmation"
+                                }
+                            ]
+                        },
+                        "description": "La file de travail du CGA : les échéances que des adhérents disent avoir déclarées ou payées (Q47).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Confirmer le paiement signalé",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Payée, signalement clos\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"paid\"); pm.expect(json.data.adherent_report).to.be.null; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "Le CGA tranche : sa saisie remplace et clôt le signalement de l'adhérent (Q47).",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": true,\n    \"amount_due\": 25000,\n    \"amount_paid\": 25000\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Signaler — échéance déjà réglée",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 409\", () => pm.response.to.have.status(409));",
+                                    "pm.test(\"Code d'erreur « deadline_already_settled »\", () => pm.expect(pm.response.json().code).to.eql(\"deadline_already_settled\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "Une échéance payée et confirmée par le CGA ne se signale plus.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"report\": \"declared\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Corriger — remettre l'échéance de la boulangerie à faire",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"À faire\", () => { const json = pm.response.json(); pm.expect(json.data.status).to.eql(\"to_do\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherents/{{bakery_id}}/deadlines/{{report_obligation_id}}/{{report_due_date}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherents",
+                                "{{bakery_id}}",
+                                "deadlines",
+                                "{{report_obligation_id}}",
+                                "{{report_due_date}}"
+                            ]
+                        },
+                        "description": "Correction par le CGA ; elle remet aussi la boulangerie de démo dans son état de départ, pour pouvoir rejouer ce dossier.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_gerant}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"declared\": false\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Échéancier du portefeuille",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Dossiers du CGA\", () => { const json = pm.response.json(); pm.expect(json.meta.months).to.eql(3); pm.expect(json.meta.total).to.be.above(0); pm.expect(json.data.map(d => d.adherent.company_name)).to.include(\"Boulangerie Le Bon Pain\"); });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/deadlines",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "deadlines"
+                            ]
+                        },
+                        "description": "Échéances de tous les dossiers actifs du CGA, triées par date puis par raison sociale, 50 par page. Mêmes filtres : `months`, `status` (to_do, declared, partially_paid, paid, `pending_confirmation`, `overdue`), `administration`.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Portefeuille — échéances en retard",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Toutes en retard\", () => { const json = pm.response.json(); pm.expect(json.data.every(d => d.overdue === true)).to.be.true; });"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/deadlines?status=overdue",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "deadlines"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "overdue"
+                                }
+                            ]
+                        },
+                        "description": "Échéances passées et non réglées.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Portefeuille — statut inconnu",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 422\", () => pm.response.to.have.status(422));",
+                                    "pm.test(\"Message sur « status »\", () => pm.expect(pm.response.json().errors[\"status\"][0]).to.eql(\"La valeur du champ statut est invalide.\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/deadlines?status=archive",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "deadlines"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "archive"
+                                }
+                            ]
+                        },
+                        "description": "Le filtre de statut est contrôlé.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Portefeuille — refusé dans l'espace adhérent",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « space_forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"space_forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/deadlines",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "deadlines"
+                            ]
+                        },
+                        "description": "Le portefeuille est réservé aux agents du CGA.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_adherent}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Mon échéancier — refusé à un agent du CGA",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Statut HTTP 403\", () => pm.response.to.have.status(403));",
+                                    "pm.test(\"Code d'erreur « space_forbidden »\", () => pm.expect(pm.response.json().code).to.eql(\"space_forbidden\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Accept",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/adherent/deadlines",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "adherent",
+                                "deadlines"
+                            ]
+                        },
+                        "description": "Route réservée à l'espace adhérent.",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{token_comptable}}",
+                                    "type": "string"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
         }
     ],
     "variable": [
@@ -8625,6 +11411,46 @@
         },
         {
             "key": "adherent_phone",
+            "value": ""
+        },
+        {
+            "key": "obligation_tva_id",
+            "value": ""
+        },
+        {
+            "key": "obl_ncc",
+            "value": ""
+        },
+        {
+            "key": "obl_adherent_id",
+            "value": ""
+        },
+        {
+            "key": "obl_assignment_e302",
+            "value": ""
+        },
+        {
+            "key": "obl_assignment_expa",
+            "value": ""
+        },
+        {
+            "key": "obl_deadline_obligation_id",
+            "value": ""
+        },
+        {
+            "key": "obl_deadline_date",
+            "value": ""
+        },
+        {
+            "key": "obl_deadline_wrong_date",
+            "value": ""
+        },
+        {
+            "key": "report_obligation_id",
+            "value": ""
+        },
+        {
+            "key": "report_due_date",
             "value": ""
         }
     ]

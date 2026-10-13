@@ -107,9 +107,34 @@ class ObligationReferentialImporter
                         $administration['code'],
                     ));
                 }
+
+                foreach (array_filter([$obligation['condition'] ?? null, $obligation['periodicite_conditionnelle']['si'] ?? null]) as $condition) {
+                    $this->ensureConditionIsKnown($condition, $content, $obligation['id']);
+                }
             }
         }
 
         return $content;
+    }
+
+    /**
+     * Une condition qui vise un champ ou un seuil inconnu ferait disparaître une obligation
+     * sans que personne ne le voie : le chargement est refusé.
+     *
+     * @param  array<string, mixed>  $condition
+     * @param  array<string, mixed>  $content
+     */
+    private function ensureConditionIsKnown(array $condition, array $content, string $obligationId): void
+    {
+        $fields = $content['profil_champs'] ?? [];
+        $thresholds = $content['seuils'] ?? [];
+
+        if (! in_array($condition['champ'] ?? null, $fields, true)) {
+            throw new InvalidArgumentException("Obligation « {$obligationId} » : champ de profil inconnu « ".($condition['champ'] ?? '?').' ».');
+        }
+
+        if (isset($condition['seuil']) && ! array_key_exists($condition['seuil'], $thresholds)) {
+            throw new InvalidArgumentException("Obligation « {$obligationId} » : seuil inconnu « {$condition['seuil']} ».");
+        }
     }
 }

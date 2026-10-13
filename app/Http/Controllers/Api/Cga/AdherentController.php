@@ -11,6 +11,7 @@ use App\Http\Resources\AdherentResource;
 use App\Models\ActivityLog;
 use App\Models\Adherent;
 use App\Support\ActiveSpace;
+use App\Support\AdherentObligations;
 use App\Support\Adherents;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -72,7 +73,7 @@ class AdherentController extends Controller
     /**
      * Modifie le dossier ; l'ancienne et la nouvelle valeur de chaque champ sont gardées (Q32).
      */
-    public function update(UpdateAdherentRequest $request, Adherent $adherent, Adherents $adherents): JsonResponse
+    public function update(UpdateAdherentRequest $request, Adherent $adherent, Adherents $adherents, AdherentObligations $obligations): JsonResponse
     {
         $adherent->fill(Arr::except($request->validated(), ['change_justification']));
 
@@ -81,6 +82,8 @@ class AdherentController extends Controller
         }
 
         $adherent->save();
+        // Un profil modifié (effectif, activité…) peut ouvrir de nouvelles obligations (Q45).
+        $obligations->propose($adherent->unsetRelation('regime'));
 
         return $this->respond($adherent, $adherents);
     }

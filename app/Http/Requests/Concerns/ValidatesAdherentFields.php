@@ -70,6 +70,13 @@ trait ValidatesAdherentFields
             'owner_id_document' => $optionalText(100),
             'membership_fee' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'joined_at' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
+            // Profil déclencheur des obligations (Q45, référentiel Legal Flow).
+            'cmu_dependents' => ['sometimes', 'integer', 'min:0', 'max:100000'],
+            'sells_to_consumers' => ['sometimes', 'boolean'],
+            'uses_measuring_instruments' => ['sometimes', 'boolean'],
+            'has_expatriates' => ['sometimes', 'boolean'],
+            'has_interns' => ['sometimes', 'boolean'],
+            'has_sme_status' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -111,6 +118,12 @@ trait ValidatesAdherentFields
             'owner_id_document' => "pièce d'identité du dirigeant",
             'membership_fee' => "droit d'adhésion",
             'joined_at' => "date d'adhésion",
+            'cmu_dependents' => 'ayants droit CMU',
+            'sells_to_consumers' => 'vente aux consommateurs',
+            'uses_measuring_instruments' => 'instruments de mesure',
+            'has_expatriates' => 'salariés expatriés',
+            'has_interns' => 'stagiaires ou apprentis',
+            'has_sme_status' => 'statut PME',
         ];
     }
 }

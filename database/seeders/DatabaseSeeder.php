@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AdherentReport;
 use App\Enums\LegalForm;
 use App\Enums\Role;
 use App\Enums\TurnoverBasis;
@@ -12,7 +13,10 @@ use App\Models\Regime;
 use App\Models\Sector;
 use App\Models\TaxRegion;
 use App\Models\User;
+use App\Support\AdherentObligations;
 use App\Support\Adherents;
+use App\Support\Deadlines;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 
 /**
@@ -70,7 +74,11 @@ class DatabaseSeeder extends Seeder
         $this->account('0700000004', 'Agent CNCGA', Role::AgentCncga);
         $this->account('0700000005', 'Membre du bureau CNCGA', Role::MembreBureau);
         $this->account('0700000006', 'Comptable Démo Abidjan', Role::Comptable, $cgaAbidjan);
-        $this->account('0700000007', 'Adhérent Démo Abidjan', Role::Adherent, $cgaAbidjan, adherent: $bakery);
+        $owner = $this->account('0700000007', 'Adhérent Démo Abidjan', Role::Adherent, $cgaAbidjan, adherent: $bakery);
+
+        // Une déclaration signalée par l'adhérent, en attente de confirmation par le CGA (Q47).
+        $first = app(Deadlines::class)->forAdherent($bakery, CarbonImmutable::today(), 3)->first();
+        app(Deadlines::class)->report($bakery, $first['obligation'], CarbonImmutable::parse($first['due_date']), AdherentReport::Declared, null, $owner);
         $this->account('0700000008', 'Gérant Démo Suspendu', Role::Gerant, $cgaSuspended);
 
         User::factory()->disabled()->create(['name' => 'Compte désactivé', 'phone' => '0700000009']);
@@ -93,13 +101,15 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Deux dossiers validés et un brouillon dans DEMOA, un brouillon dans DEMOB (en cours d'agrément,
-     * il ne peut pas encore valider de dossier). Données fictives.
+     * il ne peut pas encore valider de dossier). Les obligations proposées par le moteur sont
+     * confirmées pour les deux dossiers validés. Données fictives.
      *
      * @return list<Adherent>
      */
     private function demoAdherents(Cga $cgaAbidjan, Cga $cgaBouake, User $gerant, int $taxCenterId): array
     {
         $adherents = app(Adherents::class);
+        $obligations = app(AdherentObligations::class);
         $regimes = Regime::pluck('id', 'code');
         $sectors = Sector::pluck('id', 'code');
 
@@ -119,9 +129,12 @@ class DatabaseSeeder extends Seeder
             'turnover' => 18_000_000,
             'turnover_basis' => TurnoverBasis::PreviousYear,
             'employees' => 4,
+            'sells_to_consumers' => true,
+            'uses_measuring_instruments' => true,
             'joined_at' => '2026-02-10',
         ], $cgaAbidjan, $gerant);
         $adherents->validate($bakery, $gerant);
+        $obligations->confirmProposals($bakery, $gerant);
 
         $individual = $adherents->createDraft([
             'legal_form' => LegalForm::EntrepriseIndividuelle,
@@ -143,6 +156,7 @@ class DatabaseSeeder extends Seeder
             'joined_at' => '2026-03-01',
         ], $cgaAbidjan, $gerant);
         $adherents->validate($individual, $gerant);
+        $obligations->confirmProposals($individual, $gerant);
 
         $draft = $adherents->createDraft([
             'legal_form' => LegalForm::Sarl,
