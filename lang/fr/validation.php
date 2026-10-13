@@ -152,6 +152,8 @@ return [
         'password' => 'mot de passe',
         'device_name' => "nom de l'appareil",
         'membership_id' => 'espace',
+        'code' => 'code',
+        'token' => "lien d'invitation",
     ],
 
 ];

@@ -28,6 +28,7 @@ enum SettingKey: string
     case InactiveUserDisabledAfterMonths = 'inactive_user_disabled_after_months';
     case InactiveUserDeletedAfterMonths = 'inactive_user_deleted_after_months';
     case ActivityLogRetentionYears = 'activity_log_retention_years';
+    case InvitationValidDays = 'invitation_valid_days';
 
     public function definition(): SettingDefinition
     {
@@ -173,6 +174,14 @@ enum SettingKey: string
                 rules: ['integer', 'min:1', 'max:30'],
                 level: SettingLevel::Network,
                 question: 'Q85',
+            ),
+            self::InvitationValidDays => new SettingDefinition(
+                label: "Validité d'un lien d'invitation (jours)",
+                default: 7,
+                rules: ['integer', 'min:1', 'max:30'],
+                level: SettingLevel::Network,
+                question: 'Q12',
+                toBeConfirmed: true,
             ),
         };
     }

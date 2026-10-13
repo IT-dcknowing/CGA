@@ -1,0 +1,1 @@
+Ce fichier texte sert a verifier que l API refuse un fichier qui n est pas une image.

@@ -60,6 +60,11 @@ class User extends Authenticatable
         return $this->hasMany(Membership::class);
     }
 
+    public function routeNotificationForSms(): string
+    {
+        return $this->phone;
+    }
+
     public function isDisabled(): bool
     {
         return $this->disabled_at !== null;

@@ -70,7 +70,7 @@ class CgaControllerTest extends TestCase
     {
         $response = $this->withToken($this->tokenForRole(Role::Presidente))->postJson('/api/v1/cncga/cgas', [
             'name' => 'CGA agréé',
-            'approval_no' => '296/SEPMBPE/DGI',
+            'approval_no' => '000/DEMO/DGI',
             'approval_date' => '2018-03-29',
         ]);
 

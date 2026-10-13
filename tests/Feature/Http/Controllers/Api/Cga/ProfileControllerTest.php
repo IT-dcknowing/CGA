@@ -34,9 +34,9 @@ class ProfileControllerTest extends TestCase
 
         $response = $this->withToken($this->tokenForRole(Role::Gerant, $cga))->patchJson('/api/v1/cga/profile', [
             'abbreviation' => 'dck',
-            'ncc' => '1864699 A',
-            'phone' => '27 22 42 14 43',
-            'manager_name' => 'KEYMAN Constant',
+            'ncc' => '0000000 X',
+            'phone' => '27 20 00 00 00',
+            'manager_name' => 'Gérant Démo',
             'tax_region_id' => $center->tax_region_id,
             'tax_center_id' => $center->id,
             'next_member_seq' => 143,
@@ -45,7 +45,7 @@ class ProfileControllerTest extends TestCase
         $response->assertOk()->assertJsonPath('data.abbreviation', 'DCK');
         $cga->refresh();
         $this->assertSame('DCK', $cga->abbreviation);
-        $this->assertSame('+2252722421443', $cga->phone);
+        $this->assertSame('+2252720000000', $cga->phone);
         $this->assertSame($center->id, $cga->tax_center_id);
         $this->assertSame(143, $cga->next_member_seq);
     }

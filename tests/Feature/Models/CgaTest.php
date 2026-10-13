@@ -15,7 +15,7 @@ class CgaTest extends TestCase
     {
         $cga = Cga::factory()->pending()->create();
 
-        $cga->update(['approval_no' => '296/SEPMBPE/DGI', 'approval_date' => '2018-03-29']);
+        $cga->update(['approval_no' => '000/DEMO/DGI', 'approval_date' => '2018-03-29']);
 
         $this->assertSame(CgaStatus::Active, $cga->fresh()->status);
     }
@@ -24,7 +24,7 @@ class CgaTest extends TestCase
     {
         $cga = Cga::factory()->pending()->create();
 
-        $cga->update(['approval_no' => '296/SEPMBPE/DGI']);
+        $cga->update(['approval_no' => '000/DEMO/DGI']);
 
         $this->assertSame(CgaStatus::Pending, $cga->fresh()->status);
     }
@@ -33,7 +33,7 @@ class CgaTest extends TestCase
     {
         $cga = Cga::factory()->suspended()->create();
 
-        $cga->update(['approval_no' => '296/SEPMBPE/DGI', 'approval_date' => '2018-03-29']);
+        $cga->update(['approval_no' => '000/DEMO/DGI', 'approval_date' => '2018-03-29']);
 
         $this->assertSame(CgaStatus::Suspended, $cga->fresh()->status);
     }

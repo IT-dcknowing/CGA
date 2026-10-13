@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Cga\BrandingController;
 use App\Http\Controllers\Api\Cga\ProfileController;
 use App\Http\Controllers\Api\Cncga\CgaController;
+use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReferenceController;
 use App\Http\Controllers\Api\SettingController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +20,17 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
     Route::post('auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:login')
         ->name('auth.login');
+
+    // Invitation et mot de passe oublié par SMS (Q12), sans jeton.
+    Route::post('auth/accept-invitation', [InvitationController::class, 'accept'])
+        ->middleware('throttle:accept-invitation')
+        ->name('auth.accept-invitation');
+    Route::post('auth/forgot-password', [PasswordResetController::class, 'sendCode'])
+        ->middleware('throttle:sms-code')
+        ->name('auth.forgot-password');
+    Route::post('auth/reset-password', [PasswordResetController::class, 'reset'])
+        ->middleware('throttle:login')
+        ->name('auth.reset-password');
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('me', [AuthController::class, 'me'])->name('me');
@@ -41,6 +54,11 @@ Route::prefix('v1')->name('v1.')->group(function (): void {
             Route::put('settings/{key}', [SettingController::class, 'update'])
                 ->middleware('role:presidente,gerant')
                 ->name('settings.update');
+
+            // Étape 1 : invitations (Q11, Q12).
+            Route::post('invitations', [InvitationController::class, 'store'])
+                ->middleware('role:presidente,agent_cncga,gerant')
+                ->name('invitations.store');
         });
 
         // Étape 3 : registre des CGA, tenu par le CNCGA.

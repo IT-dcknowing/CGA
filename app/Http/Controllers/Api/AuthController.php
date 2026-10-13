@@ -7,11 +7,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\SwitchSpaceRequest;
 use App\Http\Resources\MembershipResource;
-use App\Http\Resources\UserResource;
 use App\Models\ActivityLog;
 use App\Models\Membership;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
+use App\Support\SessionOpener;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -20,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(private SessionOpener $sessions) {}
+
     /**
      * Connexion par téléphone et mot de passe (Q12). L'espace est choisi d'office
      * quand la personne n'a qu'un accès actif, ou un accès marqué principal.
@@ -38,22 +39,8 @@ class AuthController extends Controller
             throw ApiException::accountDisabled();
         }
 
-        $memberships = $this->activeMemberships($user);
-        $defaultMembership = $memberships->count() === 1
-            ? $memberships->first()
-            : $memberships->firstWhere('is_primary', true);
-
-        $token = $user->createToken($request->validated('device_name') ?? 'api');
-        $token->accessToken->membership()->associate($defaultMembership)->save();
-
-        $user->forceFill(['last_login_at' => now()])->saveQuietly();
-        ActivityLog::record('login', $user, causer: $user);
-
         return response()->json([
-            'data' => [
-                'token' => $token->plainTextToken,
-                ...$this->session($user, $memberships, $defaultMembership?->id),
-            ],
+            'data' => $this->sessions->open($user, $request->validated('device_name')),
         ]);
     }
 
@@ -63,11 +50,11 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
-        $memberships = $this->activeMemberships($user);
+        $memberships = $this->sessions->activeMemberships($user);
         $activeMembershipId = $user->currentAccessToken()->membership_id;
 
         return response()->json([
-            'data' => $this->session(
+            'data' => $this->sessions->describe(
                 $user,
                 $memberships,
                 $memberships->contains('id', $activeMembershipId) ? $activeMembershipId : null,
@@ -98,26 +85,5 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->noContent();
-    }
-
-    /**
-     * @return Collection<int, Membership>
-     */
-    private function activeMemberships(User $user): Collection
-    {
-        return $user->memberships()->active()->with('cga')->orderBy('id')->get();
-    }
-
-    /**
-     * @param  Collection<int, Membership>  $memberships
-     * @return array{user: UserResource, memberships: mixed, active_membership_id: int|null}
-     */
-    private function session(User $user, Collection $memberships, ?int $activeMembershipId): array
-    {
-        return [
-            'user' => new UserResource($user),
-            'memberships' => MembershipResource::collection($memberships),
-            'active_membership_id' => $activeMembershipId,
-        ];
     }
 }

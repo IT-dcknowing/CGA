@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    /*
+    | Envoi des SMS (invitations, codes de réinitialisation). « log » écrit les messages dans
+    | storage/logs/sms.log sans rien envoyer : à remplacer par le pilote du fournisseur choisi.
+    */
+
+    'sms' => [
+        'driver' => env('SMS_DRIVER', 'log'),
+        'log_channel' => env('SMS_LOG_CHANNEL', 'sms'),
+    ],
+
 ];

@@ -54,6 +54,21 @@ class ApiException extends Exception implements ShouldntReport
         return new self('cga_not_suspended', "Ce CGA n'est pas suspendu.", 409);
     }
 
+    public static function alreadyMember(): self
+    {
+        return new self('already_member', 'Cette personne a déjà cet accès.', 409);
+    }
+
+    public static function invitationInvalid(): self
+    {
+        return new self('invitation_invalid', "Ce lien d'invitation n'est plus valable. Demandez une nouvelle invitation.", 422);
+    }
+
+    public static function resetCodeInvalid(): self
+    {
+        return new self('reset_code_invalid', 'Code invalide ou expiré. Demandez un nouveau code.', 422);
+    }
+
     public static function settingNotEditable(): self
     {
         return new self('setting_not_editable', 'Ce paramètre est fixé par le CNCGA pour tout le réseau.', 403);

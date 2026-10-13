@@ -2,28 +2,20 @@
 
 namespace App\Http\Requests\Auth;
 
-use App\Support\PhoneNumber;
+use App\Http\Requests\Concerns\NormalizesPhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class LoginRequest extends FormRequest
 {
+    use NormalizesPhone;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
         return true;
-    }
-
-    /**
-     * Accepte « 07 00 00 00 01 », « +225 0700000001 », « 00225… » et compare au format enregistré.
-     */
-    protected function prepareForValidation(): void
-    {
-        if (is_string($this->input('phone'))) {
-            $this->merge(['phone' => PhoneNumber::normalize($this->input('phone'))]);
-        }
     }
 
     /**
@@ -34,7 +26,7 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => ['required', 'string', 'regex:'.PhoneNumber::PATTERN],
+            'phone' => $this->phoneRules(),
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:100'],
         ];
