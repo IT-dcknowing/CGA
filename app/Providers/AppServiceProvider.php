@@ -11,6 +11,7 @@ use App\Support\Sms\LogSmsSender;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 use Laravel\Sanctum\Sanctum;
@@ -36,6 +37,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Identifiants numériques uniquement : PostgreSQL refuse de comparer un identifiant à du
+        // texte, et /adherents/abc répondrait 500 au lieu de 404.
+        Route::patterns([
+            'adherent' => '[0-9]+',
+            'adherentObligation' => '[0-9]+',
+            'cga' => '[0-9]+',
+            'obligation' => '[0-9]+',
+        ]);
+
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
 
         Sanctum::authenticateAccessTokensUsing(
